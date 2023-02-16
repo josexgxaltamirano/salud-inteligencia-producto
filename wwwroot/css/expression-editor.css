@@ -1,0 +1,79 @@
+.container-editor-modal {
+    height: 300px;
+    max-height: 450px;
+    overflow: auto;
+    padding: 5px
+}
+.border-blue {
+    border: 1px solid #3c73c5cc;
+}
+
+.border--blue-dashed {
+    border: 1px dashed #3c73c5cc;
+}
+
+.border-blue-2 {
+    border: 2px solid #3c73c5cc;
+}
+
+.expression-editor .expression-container{
+  position: relative;
+  margin: 4px 0;
+  border-radius: 5px;
+  padding: 5px;
+  border: 1px solid #EEE;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.expression-editor .expression-container .expression-filter-simple-container,
+.expression-editor .expression-container .expression-operator-container,
+.expression-editor .expression-container .expression-value-container{
+  display: inline-block;
+  margin: 0 5px 0 0;
+  vertical-align: middle;
+}
+
+expression-editor.expression-filter-container {
+    margin: 0 5px 0 0;
+    vertical-align: middle;
+}
+
+.expression-editor .expression-group-container {
+    padding: 10px;
+    padding-bottom: 6px;
+    border: 1px solid #3c73c5cc;
+    background: rgba(131, 173, 237, 0.5);
+}
+
+.expression-editor .expression-group-header {
+  margin-bottom: 10px;
+}
+
+.expression-editor .condition-list {
+  list-style: none;
+  padding: 0 0 0 15px;
+  margin: 0;
+}
+
+.expression-editor .condition-list > *::before {
+  top: -4px;
+  border-width: 0 0 2px 2px;
+}
+
+.expression-editor .condition-list > *::after {
+  top: 50%;
+  border-width: 0 0 0 2px;
+}
+
+.expression-editor .condition-list > *:first-child::before {
+  top: -12px;
+  height: calc(50% + 14px);
+}
+
+.expression-editor .condition-list > *:last-child::before {
+  border-radius: 0 0 0 4px;
+}
+
+.expression-editor .condition-list > *:last-child::after {
+  display: none;
+}

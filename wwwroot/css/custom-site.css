@@ -1,0 +1,75 @@
+﻿.custom-list-group {
+    max-height: 75vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.custom-datatable-content {
+    /*overflow-wrap: break-word;*/
+    /*word-wrap: break-word;
+    hyphens: auto;*/
+
+    text-overflow: ellipsis;
+    display: block;
+    overflow: hidden;
+}
+
+.custom-datatable-content-width {
+    max-width: 100px;
+}
+
+.btn-primary {
+    border-color: #0060AC !important;
+    background-color: #0060AC !important;
+}
+
+.card-title{
+    color:#0060AC !important;
+    font-size:24pt !important;
+}
+
+.sidebar-item:hover {
+    background-color: white;
+}
+
+.sidebar-link:hover {
+    color: #0060AC !important;
+}
+
+.sidebar-link:hover i {
+      color: #0060AC !important;
+}
+.logo-salud {
+    top: 32px;
+    left: 30px;
+    width: 112px;
+    height: 26px;
+}
+.subtitulo-salud {
+    right:0!important;
+    font-size:13px;
+    letter-spacing: 0;
+    color: #FFFFFF;
+    opacity: 1;
+}
+
+.sidebar-selected {
+    background-color: white;
+}
+
+.sidebar-link-selected {
+    color: #0060AC !important;
+}
+
+.sidebar-link-selected i {
+    color: #0060AC !important;
+}
+.avatar{
+    height:30px !important;
+    width:30px !important;
+}
+.btn-logout {
+    border: none !important;
+    background: white !important;
+    margin:5px;
+}
