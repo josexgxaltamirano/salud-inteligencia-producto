@@ -898,49 +898,49 @@ function ActionListOptions(data, jsFromServer) {
                 case FUNCTION_SELECT:
                     if (hasData) {
                         if (jsFromServer.action.templateName === FUNCTION_SELECT) {
-                            return new ActionListSelect(data, jsFromServer.action)
+                            return new ActionList(data, FUNCTION_SELECT, jsFromServer.action)
                         }
                     }
-                    return new ActionListSelect(data);
+                    return new ActionList(data, FUNCTION_SELECT);
                 case FUNCTION_SUM:
                     if (hasData) {
                         if (jsFromServer.action.templateName === FUNCTION_SUM) {
-                            return new ActionListSum(data, jsFromServer.action)
+                            return new ActionList(data, FUNCTION_SUM, jsFromServer.action)
                         }
                     }
-                    return new ActionListSum(data);
+                    return new ActionList(data, FUNCTION_SUM);
                 case FUNCTION_FIRST:
                     if (hasData) {
                         if (jsFromServer.action.templateName === FUNCTION_FIRST) {
-                            return new ActionListFirst(data, jsFromServer.action)
+                            return new ActionList(data, FUNCTION_FIRST, jsFromServer.action)
                         }
                     }
-                    return new ActionListFirst(getDataWithOutFunctions(data));
+                    return new ActionList(data, FUNCTION_FIRST);
                 case FUNCTION_DISTINCT:
                     if (hasData) {
                         if (jsFromServer.action.templateName === FUNCTION_DISTINCT) {
-                            return new ActionListDistinct(data, jsFromServer.action)
+                            return new ActionList(data, FUNCTION_DISTINCT, jsFromServer.action)
                         }
                     }
-                    return new ActionListDistinct(getDataWithOutFunctions(data));
+                    return new ActionList(data, FUNCTION_DISTINCT);;
                 case FUNCTION_COUNT:
                     if (hasData) {
                         if (jsFromServer.action.templateName === FUNCTION_COUNT) {
-                            return new ActionListCount(data, jsFromServer.action)
+                            return new ActionList(data, FUNCTION_COUNT, jsFromServer.action)
                         }
                     }
-                    return new ActionListCount(getDataWithOutFunctions(data));
+                    return new ActionList(data, FUNCTION_COUNT, jsFromServer.action)
                 case FUNCTION_FIRSTORDEFAULT:
                     if (hasData) {
                         if (jsFromServer.action.templateName === FUNCTION_FIRSTORDEFAULT) {
-                            return new ActionListFirstOrDefault(data, jsFromServer.action)
+                            return new ActionList(data, FUNCTION_FIRSTORDEFAULT, jsFromServer.action)
                         }
                     }
-                    return new ActionListFirstOrDefault(getDataWithOutFunctions(data));
+                    return new ActionList(data, FUNCTION_FIRSTORDEFAULT, jsFromServer.action);
                 case FUNCTION_ANY:
                     if (hasData) {
                         if (jsFromServer.action.templateName === FUNCTION_ANY) {
-                            return new ActionAny(jsFromServer.action)
+                            return new ActionList(data, FUNCTION_ANY, jsFromServer.action)
                         }
                     }
                     return new ActionAny();
@@ -989,7 +989,7 @@ function ActionList(data, listOptionId, jsFromServer) {
         hasData = true;
         posSelectedLogicalOperator = getObjectByValue(jsFromServer.selectedLogicalOperator, logicalOperators)
     }
-    self.templateName = FUNCTION_WHERE;
+    self.templateName = listOptionId;
     self.logicalOperators = ko.observableArray(logicalOperators);
     self.selectedLogicalOperator = ko.observable(logicalOperators[posSelectedLogicalOperator].value);
     self.childrens = ko.observableArray();
@@ -1518,7 +1518,7 @@ function SelectVariableType(jsFromServer) {
     })
     //ko.mapping.fromJS(jsFromServer, {}, self);
     self.text = ko.computed(function () {
-        if (self.selectedVariable() != undefined) {
+        if (self.selectedVariable() !== undefined) {
             if (self.selectedFunction() && self.addFunctionToExpression()) {
                 return self.selectedFunction().id + "(" + self.action().text() + ")"
             } else {

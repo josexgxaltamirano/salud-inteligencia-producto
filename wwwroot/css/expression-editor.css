@@ -1,5 +1,5 @@
 .container-editor-modal {
-    height: 300px;
+    min-height: 300px;
     max-height: 850px;
     overflow: auto;
     padding: 5px
