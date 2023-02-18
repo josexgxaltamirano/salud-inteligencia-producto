@@ -289,7 +289,6 @@ function ExpressionSelectObjectFromList(classes, dataList, jsFromServer) {
             'childrens': {
                 create: function (options) {
                     var data = options.data;
-                    console.log(options)
                     if (data.templatesName === 'select-variable-type-template') {
                         return new SelectVariableType(data)
                     }
@@ -302,8 +301,8 @@ function ExpressionSelectObjectFromList(classes, dataList, jsFromServer) {
                     else if (data.templatesName === 'expression-json-grouper-template') {
                         return new ExpressionJsonGrouper(data)
                     }
-                    else if (data.templatesName === FILTER_LOCAL_PARAM_TEMPLATE_NAME) {
-                        return new FilterLocalParams(dataList.childrens, data)
+                    else if (data.templatesName === "filter-localparams-container-template") {
+                        return new FilterLocalParamsContainer(dataList.childrens, data)
                     }
                 }
             },
@@ -313,7 +312,7 @@ function ExpressionSelectObjectFromList(classes, dataList, jsFromServer) {
     }
 
     self.addPropertyVariable = function () {
-        self.childrens.push(new FilterLocalParams(dataList.childrens))
+        self.childrens.push(new FilterLocalParamsContainer(dataList.childrens))
     }
     self.addVariable = function () {
         self.childrens.push(new SelectVariableType())
@@ -344,6 +343,7 @@ function ExpressionSelectObjectFromList(classes, dataList, jsFromServer) {
 ExpressionSelectObjectFromList.prototype.toJSON = function () {
     var copy = ko.toJS(this);
     delete copy.classes;
+    delete copy.listName;
     delete copy.text;
     return copy;
 }
@@ -519,9 +519,26 @@ Operation.prototype.toJSON = function () {
     return copy;
 }
 
+function FilterLocalParamsContainer(data, jsFromServer) {
+    const self = this;
+    var hasData = false;
+    if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
+        hasData = true
+    }
+    self.templatesName = "filter-localparams-container-template";
+    self.action = ko.observable(hasData ? new FilterLocalParams(data, jsFromServer.action) : new FilterLocalParams(data))
+   
+    self.text = ko.computed(function () {
+        return self.action().text();
+    })
+}
+FilterLocalParamsContainer.prototype.toJSON = function () {
+    var copy = ko.toJS(this);
+    delete copy.text;
+    return copy;
+}
+
 function FilterLocalParams(data, jsFromServer) {
-    console.log(data)
-    console.log(jsFromServer)
     const self = this;
     var hasData = false;
     var posSelectedOption = 0;
@@ -560,11 +577,24 @@ function FilterLocalParams(data, jsFromServer) {
                 }
                 return new ActionLogical(self.selectedOption().dataType)
             }
+
+            if (dataType === DATA_TYPE_BOOLEAN) {
+                if (hasData) {
+                    return new ActionBoolean(jsFromServer.action);
+                }
+                return new ActionBoolean();
+            }
             if (dataType === DATA_TYPE_LIST && self.addFunctionForList()) {
                 if (hasData) {
                     return new ActionListOptions(self.selectedOption().dataType, jsFromServer.action)
                 }
                 return new ActionListOptions(self.selectedOption())
+            }
+            if (dataType === DATA_TYPE_OBJECT) {
+                if (hasData) {
+                    return new Filter(self.selectedOption(), jsFromServer.action)
+                }
+                return new Filter(self.selectedOption())
             }
         }
         return new ActionNone();
@@ -581,6 +611,9 @@ function FilterLocalParams(data, jsFromServer) {
 
     self.text = ko.computed(function () {
         if (self.selectedOption()) {
+            if (self.selectedOption().dataType === DATA_TYPE_OBJECT) {
+                return self.actionPrimitive().text() + self.action().text();
+            }
             return self.selectedOption().id + self.actionPrimitive().text() + self.action().text();
         }
         return "";
@@ -782,6 +815,7 @@ FilterSimple.prototype.toJSON = function () {
 
 function FilterLocalParamsSimple(data, jsFromServer) {
     const self = this;
+    data = getDataWithOutFunctions(data);
     let hasData = false;
     let posSelectedOption = 0;
     if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
@@ -869,6 +903,7 @@ ActionBoolean.prototype.toJSON = function () {
 
 function ActionListOptions(data, jsFromServer) {
     const self = this;
+    data = getDataWithOutFunctions(data);
     let hasData = false;
     let posSelectedFunction = 0;
     if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
@@ -929,21 +964,21 @@ function ActionListOptions(data, jsFromServer) {
                             return new ActionList(data, FUNCTION_COUNT, jsFromServer.action)
                         }
                     }
-                    return new ActionList(data, FUNCTION_COUNT, jsFromServer.action)
+                    return new ActionList(data, FUNCTION_COUNT)
                 case FUNCTION_FIRSTORDEFAULT:
                     if (hasData) {
                         if (jsFromServer.action.templateName === FUNCTION_FIRSTORDEFAULT) {
                             return new ActionList(data, FUNCTION_FIRSTORDEFAULT, jsFromServer.action)
                         }
                     }
-                    return new ActionList(data, FUNCTION_FIRSTORDEFAULT, jsFromServer.action);
+                    return new ActionList(data, FUNCTION_FIRSTORDEFAULT);
                 case FUNCTION_ANY:
                     if (hasData) {
                         if (jsFromServer.action.templateName === FUNCTION_ANY) {
                             return new ActionList(data, FUNCTION_ANY, jsFromServer.action)
                         }
                     }
-                    return new ActionAny();
+                    return new ActionList(data, FUNCTION_ANY);
                 case FUNCTION_EQUAL:
                     if (hasData) {
                         if (jsFromServer.action.templateName === FUNCTION_EQUAL) {
@@ -981,8 +1016,6 @@ ActionListOptions.prototype.toJSON = function () {
 
 function ActionList(data, listOptionId, jsFromServer) {
     const self = this;
-
-    data = getDataWithOutFunctions(data);
     var hasData = false;
     let posSelectedLogicalOperator = 0;
     if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
@@ -1007,7 +1040,7 @@ function ActionList(data, listOptionId, jsFromServer) {
     }
     self.addFunctionToWhere = ko.observable(hasData ? jsFromServer.addFunctionToWhere : false);
     self.action = ko.computed(function () {
-        if (self.addFunctionToWhere) {
+        if (self.addFunctionToWhere()) {
             if (hasData) {
                 return new ActionListOptions(data, jsFromServer.action)
             }
@@ -1042,398 +1075,6 @@ ActionList.prototype.toJSON = function () {
     return copy;
 }
 
-function ActionListWhere(data, jsFromServer) {
-    const self = this;
-    var hasData = false;
-    let posSelectedLogicalOperator = 0;
-    if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
-        hasData = true;
-        posSelectedLogicalOperator = getObjectByValue(jsFromServer.selectedLogicalOperator, logicalOperators)
-    }
-    self.templateName = FUNCTION_WHERE;
-    self.logicalOperators = ko.observableArray(logicalOperators);
-    self.selectedLogicalOperator = ko.observable(logicalOperators[posSelectedLogicalOperator].value);
-    self.childrens = ko.observableArray();
-    if (hasData) {
-        var mapping = {
-            'childrens': {
-                create: function (options) {
-                    return new ActionSubLogical(typeof data.childrens != "object" ? data.childrens() : data.childrens, options.data)
-                }
-            },
-            'ignore': ['logicalOperators', 'selectedLogicalOperator', 'addFunctionToWhere', 'action', 'addCondition', 'removeChild', 'removeChild']
-        }
-        ko.mapping.fromJS(jsFromServer, mapping, self)
-    }
-    self.addFunctionToWhere = ko.observable(hasData ? jsFromServer.addFunctionToWhere : false);
-    self.action = ko.computed(function () {
-        if (self.addFunctionToWhere) {
-            if (hasData) {
-                return new ActionListOptions(data, jsFromServer.action)
-            }
-            return new ActionListOptions(data);
-        }
-        return new ActionNone();
-    })
-    self.addCondition = function () {
-        self.childrens.push(new ActionSubLogical(typeof data.childrens != "object" ? data.childrens() : data.childrens));
-    }
-    self.removeChild = function (child) {
-        self.childrens.remove(child);
-    };
-    self.text = ko.computed(function () {
-        let result = '.Where(';
-        let op = '';
-        for (const child of self.childrens()) {
-            result += op + child.text();
-            op = ` ${self.selectedLogicalOperator()} `;
-        }
-        result += ')';
-        if (self.addFunctionToWhere()) {
-            result += self.action().text()
-        }
-        return result
-    });
-}
-ActionListWhere.prototype.toJSON = function () {
-    var copy = ko.toJS(this);
-    delete copy.logicalOperators;
-    delete copy.text;
-    return copy;
-}
-
-function ActionListSelect(data, jsFromServer) {
-    const self = this;
-    var hasData = false;
-    if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
-        hasData = true;
-    }
-    self.templateName = FUNCTION_SELECT;
-    self.addFunctionToSelect = ko.observable(hasData ? jsFromServer.addFunctionToSelect : false);
-    self.action = ko.observable(hasData ? new FilterLocalParamsSimple(getDataWithOutFunctions(data).childrens, jsFromServer.action) : new FilterLocalParamsSimple(getDataWithOutFunctions(data).childrens));
-    self.actionToSelect = ko.computed(function () {
-        if (self.addFunctionToSelect()) {
-            if (hasData) {
-                return new ActionListOptions(data, jsFromServer.actionToSelect)
-            }
-            return new ActionListOptions(data)
-        }
-        return new ActionNone();
-    })
-    self.text = ko.computed(function () {
-        let result = `.Select(${self.action().text()})`
-        if (self.addFunctionToSelect()) {
-            result += self.actionToSelect().text()
-        }
-        return result
-    });
-}
-ActionListSelect.prototype.toJSON = function () {
-    var copy = ko.toJS(this);
-    delete copy.text;
-    return copy;
-}
-
-function ActionListFirst(data, jsFromServer) {
-    const self = this;
-    var hasData = false;
-    var posOptionSelected = 0;
-    if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
-        hasData = true;
-        posOptionSelected = getObjectById(jsFromServer.optionSelected, ko.mapping.toJS(data.childrens));
-    }
-    self.templateName = FUNCTION_FIRST;
-    self.childrens = ko.observableArray(data.childrens);
-    self.optionSelected = ko.observable(data.childrens[posOptionSelected]);
-    self.addComparison = ko.observable(hasData ? jsFromServer.addComparison : false);
-    self.addProperties = function () {
-        addProperties(self.selectedOption());
-    };
-    self.addProperty = ko.observable(hasData ? jsFromServer.addProperty : false)
-    self.addFunctionToDistinct = ko.observable(hasData ? jsFromServer.addFunctionToDistinct : false);
-    self.actionForFunctionToDistinct = ko.computed(function () {
-        if (self.addFunctionToDistinct()) {
-            if (hasData) {
-                return new ActionListOptions(data, jsFromServer.actionForFunctionToDistinct)
-            }
-            return new ActionListOptions(data)
-        }
-        return new ActionNone();
-    })
-    self.action = ko.computed(function () {
-        if (self.optionSelected() && self.addProperty()) {
-            const dataType = self.optionSelected().dataType;
-            if ((dataType === DATA_TYPE_STRING || dataType === DATA_TYPE_NUMERIC || dataType === DATA_TYPE_DATETIME) && self.addComparison()) {
-                if (hasData) {
-                    return new ActionLogical(self.optionSelected().dataType, jsFromServer.action);
-                }
-                return new ActionLogical(self.optionSelected().dataType);
-            }
-            if (dataType === DATA_TYPE_BOOLEAN) {
-                if (hasData) {
-                    return new ActionBoolean(jsFromServer.action);
-                }
-                return new ActionBoolean();
-            }
-            if (dataType === DATA_TYPE_LIST) {
-                if (hasData) {
-                    return new ActionListOptions(self.optionSelected(), jsFromServer.action);
-                }
-                return new ActionListOptions(self.optionSelected());
-            }
-        }
-        return new ActionNone();
-    });
-
-    self.text = ko.computed(function () {
-        let text = ".First()";
-
-        if (self.optionSelected()) {
-            text += `.${self.optionSelected().id}${self.action().text()}`;
-        }
-        return text;
-    });
-}
-ActionListFirst.prototype.toJSON = function () {
-    var copy = ko.toJS(this);
-    delete copy.childrens;
-    delete copy.text;
-    return copy;
-}
-
-function ActionListSum(data, jsFromServer) {
-    const self = this;
-    var hasData = false;
-    if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
-        hasData = true;
-    }
-    self.templateName = FUNCTION_SUM;
-    self.addFunctionToSelect = ko.observable(hasData ? jsFromServer.addFunctionToSelect : false);
-    self.action = ko.observable(hasData ? new FilterLocalParamsSimple(getDataWithOutFunctions(data).childrens, jsFromServer.action) : new FilterLocalParamsSimple(getDataWithOutFunctions(data).childrens));
-    self.actionToSelect = ko.computed(function () {
-        if (self.addFunctionToSelect()) {
-            if (hasData) {
-                return new ActionListOptions(data, jsonFromServer.actionToSelect);
-            }
-            return new ActionListOptions(data);
-        }
-        return new ActionNone();
-    })
-    self.text = ko.computed(function () {
-        let result = `.Sum(${self.action().text()})`;
-        if (self.addFunctionToSelect()) {
-            result += self.actionToSelect().text()
-        }
-        return result
-    });
-}
-ActionListSum.prototype.toJSON = function () {
-    var copy = ko.toJS(this);
-    delete copy.text;
-    return copy;
-}
-
-function ActionListFirstOrDefault(data, jsFromServer) {
-    const self = this;
-    var hasData = false;
-    var posOptionSelected = 0;
-    if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
-        hasData = true;
-        posOptionSelected = getObjectById(jsFromServer.optionSelected, ko.mapping.toJS(data.childrens));
-    }
-    self.templateName = FUNCTION_FIRSTORDEFAULT;
-    self.childrens = ko.observableArray(data.childrens);
-    self.optionSelected = ko.observable(data.childrens[posOptionSelected]);
-    self.addComparison = ko.observable(hasData ? jsFromServer.addComparison : false);
-    self.addProperties = function () {
-        addProperties(self.selectedOption());
-    };
-    self.addProperty = ko.observable(hasData ? jsFromServer.addProperty : false)
-    self.addFunctionToDistinct = ko.observable(hasData ? jsFromServer.addFunctionToDistinct : false);
-    self.actionForFunctionToDistinct = ko.computed(function () {
-        if (self.addFunctionToDistinct()) {
-            if (hasData) {
-                return new ActionListOptions(data, jsFromServer.actionForFunctionToDistinct)
-            }
-            return new ActionListOptions(data)
-        }
-        return new ActionNone();
-    })
-    self.action = ko.computed(function () {
-        if (self.optionSelected() && self.addProperty()) {
-            const dataType = self.optionSelected().dataType;
-            if ((dataType === DATA_TYPE_STRING || dataType === DATA_TYPE_NUMERIC || dataType === DATA_TYPE_DATETIME) && self.addComparison()) {
-                if (hasData) {
-                    return new ActionLogical(self.optionSelected().dataType, jsFromServer.action);
-                }
-                return new ActionLogical(self.optionSelected().dataType);
-            }
-            if (dataType === DATA_TYPE_BOOLEAN) {
-                if (hasData) {
-                    return new ActionBoolean(jsFromServer.action);
-                }
-                return new ActionBoolean();
-            }
-            if (dataType === DATA_TYPE_LIST) {
-                if (hasData) {
-                    return new ActionListOptions(self.optionSelected(), jsFromServer.action);
-                }
-                return new ActionListOptions(self.optionSelected());
-            }
-        }
-        return new ActionNone();
-    });
-
-    self.text = ko.computed(function () {
-        let text = ".FirstOrDefault()";
-
-        if (self.optionSelected()) {
-            text += `.${self.optionSelected().id}${self.action().text()}`;
-        }
-        return text;
-    });
-}
-ActionListFirstOrDefault.prototype.toJSON = function () {
-    var copy = ko.toJS(this);
-    delete copy.childrens;
-    delete copy.text;
-    return copy;
-}
-
-function ActionListDistinct(data, jsFromServer) {
-    const self = this;
-    var hasData = false;
-    var posOptionSelected = 0;
-    if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
-        hasData = true;
-        posOptionSelected = getObjectById(jsFromServer.optionSelected, ko.mapping.toJS(data.childrens));
-    }
-    self.templateName = FUNCTION_DISTINCT;
-    self.childrens = ko.observableArray(data.childrens);
-    self.optionSelected = ko.observable(data.childrens[posOptionSelected]);
-    self.addComparison = ko.observable(hasData ? jsFromServer.addComparison : false);
-    self.addProperties = function () {
-        addProperties(self.selectedOption());
-    };
-    self.addProperty = ko.observable(hasData ? jsFromServer.addProperty : false)
-    self.addFunctionToDistinct = ko.observable(hasData ? jsFromServer.addFunctionToDistinct : false);
-    self.actionForFunctionToDistinct = ko.computed(function () {
-        if (self.addFunctionToDistinct()) {
-            if (hasData) {
-                return new ActionListOptions(data, jsFromServer.actionForFunctionToDistinct)
-            }
-            return new ActionListOptions(data)
-        }
-        return new ActionNone();
-    })
-    self.action = ko.computed(function () {
-        if (self.optionSelected() && self.addProperty()) {
-            const dataType = self.optionSelected().dataType;
-            if ((dataType === DATA_TYPE_STRING || dataType === DATA_TYPE_NUMERIC || dataType === DATA_TYPE_DATETIME) && self.addComparison()) {
-                if (hasData) {
-                    return new ActionLogical(self.optionSelected().dataType, jsFromServer.action);
-                }
-                return new ActionLogical(self.optionSelected().dataType);
-            }
-            if (dataType === DATA_TYPE_BOOLEAN) {
-                if (hasData) {
-                    return new ActionBoolean(jsFromServer.action);
-                }
-                return new ActionBoolean();
-            }
-            if (dataType === DATA_TYPE_LIST) {
-                if (hasData) {
-                    return new ActionListOptions(self.optionSelected(), jsFromServer.action);
-                }
-                return new ActionListOptions(self.optionSelected());
-            }
-        }
-        return new ActionNone();
-    });
-
-    self.text = ko.computed(function () {
-        let text = ".Distinct()";
-
-        if (self.optionSelected()) {
-            text += `.${self.optionSelected().id}${self.action().text()}`;
-        }
-        return text;
-    });
-}
-ActionListDistinct.prototype.toJSON = function () {
-    var copy = ko.toJS(this);
-    delete copy.childrens;
-    delete copy.text;
-    return copy;
-}
-
-function ActionListCount(data, jsFromServer) {
-    const self = this;
-    var hasData = false;
-    var posOptionSelected = 0;
-    if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
-        hasData = true;
-        posOptionSelected = getObjectById(jsFromServer.optionSelected, ko.mapping.toJS(data.childrens));
-    }
-    self.templateName = FUNCTION_COUNT;
-    self.childrens = ko.observableArray(data.childrens);
-    self.optionSelected = ko.observable(data.childrens[posOptionSelected]);
-    self.addComparison = ko.observable(hasData ? jsFromServer.addComparison : false);
-    self.addProperties = function () {
-        addProperties(self.selectedOption());
-    };
-    self.addProperty = ko.observable(hasData ? jsFromServer.addProperty : false)
-    self.addFunctionToDistinct = ko.observable(hasData ? jsFromServer.addFunctionToDistinct : false);
-    self.actionForFunctionToDistinct = ko.computed(function () {
-        if (self.addFunctionToDistinct()) {
-            if (hasData) {
-                return new ActionListOptions(data, jsFromServer.actionForFunctionToDistinct)
-            }
-            return new ActionListOptions(data)
-        }
-        return new ActionNone();
-    })
-    self.action = ko.computed(function () {
-        if (self.optionSelected() && self.addProperty()) {
-            const dataType = self.optionSelected().dataType;
-            if ((dataType === DATA_TYPE_STRING || dataType === DATA_TYPE_NUMERIC || dataType === DATA_TYPE_DATETIME) && self.addComparison()) {
-                if (hasData) {
-                    return new ActionLogical(self.optionSelected().dataType, jsFromServer.action);
-                }
-                return new ActionLogical(self.optionSelected().dataType);
-            }
-            if (dataType === DATA_TYPE_BOOLEAN) {
-                if (hasData) {
-                    return new ActionBoolean(jsFromServer.action);
-                }
-                return new ActionBoolean();
-            }
-            if (dataType === DATA_TYPE_LIST) {
-                if (hasData) {
-                    return new ActionListOptions(self.optionSelected(), jsFromServer.action);
-                }
-                return new ActionListOptions(self.optionSelected());
-            }
-        }
-        return new ActionNone();
-    });
-
-    self.text = ko.computed(function () {
-        let text = ".Count()";
-
-        if (self.optionSelected()) {
-            text += `.${self.optionSelected().id}${self.action().text()}`;
-        }
-        return text;
-    });
-}
-ActionListCount.prototype.toJSON = function () {
-    var copy = ko.toJS(this);
-    delete copy.childrens;
-    delete copy.text;
-    return copy;
-}
-
 function ActionListComparison(comparison, jsFromServer) {
     const self = this;
     var hasData = false;
@@ -1447,28 +1088,6 @@ function ActionListComparison(comparison, jsFromServer) {
     });
 }
 ActionListComparison.prototype.toJSON = function () {
-    var copy = ko.toJS(this);
-    delete copy.text;
-    return copy;
-}
-
-function ActionAny(jsFromServer) {
-    const self = this;
-    var hasData = false;
-    if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
-        hasData = true;
-    }
-    self.operatorTernary = ko.observable(hasData ? jsFromServer.operatorTernary : false);
-    self.actionTrue = ko.observable(hasData ? new SelectVariableType(jsFromServer.actionTrue) : new SelectVariableType());
-    self.actionFalse = ko.observable(hasData ? new SelectVariableType(jsFromServer.actionFalse) : new SelectVariableType());
-    self.text = ko.computed(function () {
-        if (self.operatorTernary()) {
-            return `.Any() ? ${self.actionTrue().text()} : ${self.actionFalse().text()}`;
-        }
-        return ".Any()";
-    });
-}
-ActionAny.prototype.toJSON = function () {
     var copy = ko.toJS(this);
     delete copy.text;
     return copy;
