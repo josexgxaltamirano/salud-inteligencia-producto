@@ -170,7 +170,7 @@ function Group(classes, jsFromServer) {
 
 }
 Group.prototype.toJSON = function () {
-    var copy = ko.toJS(this); 
+    var copy = ko.toJS(this);
     delete copy.logicalOperators;
     delete copy.text;
     return copy;
@@ -527,7 +527,6 @@ function FilterLocalParamsContainer(data, jsFromServer) {
     }
     self.templatesName = "filter-localparams-container-template";
     self.action = ko.observable(hasData ? new FilterLocalParams(data, jsFromServer.action) : new FilterLocalParams(data))
-   
     self.text = ko.computed(function () {
         return self.action().text();
     })
@@ -667,7 +666,7 @@ function Filter(data, jsFromServer) {
     self.actionPrimitive = ko.computed(function () {
         if (self.addFunctionToPrimitive()) {
             if (hasData) {
-                if(jsFromServer.actionPrimitive.hasOwnProperty("id")) {
+                if (jsFromServer.actionPrimitive.hasOwnProperty("id")) {
                     return new ActionForPrimitive(jsFromServer.actionPrimitive)
                 }
             }
@@ -1049,7 +1048,7 @@ function ActionList(data, listOptionId, jsFromServer) {
         return new ActionNone();
     })
     self.addExpression = function () {
-        self.childrens.push(new ExpressionSelectObjectFromList("",data))
+        self.childrens.push(new ExpressionSelectObjectFromList("", data))
     }
     self.removeChild = function (child) {
         self.childrens.remove(child);
@@ -1121,13 +1120,17 @@ function SelectVariableType(jsFromServer) {
         if (self.selectedVariable()) {
             if (self.selectedVariable().id === "value") {
                 if (hasData) {
-                    return new InputValue(jsFromServer.action)
+                    if (jsFromServer.action.templatesName === "input-value-template") {
+                        return new InputValue(jsFromServer.action)
+                    }
                 }
                 return new InputValue()
             }
             if (self.selectedVariable().id === "expression") {
                 if (hasData) {
-                    return new Expression("", jsFromServer.action)
+                    if (jsFromServer.action.templatesName === "expression-template") {
+                        return new Expression("", jsFromServer.action)
+                    }
                 }
                 return new Expression()
                 //return new Filter(dataGlobal)
@@ -1207,12 +1210,13 @@ SelectVariableTypeSimple.prototype.toJSON = function () {
 
 function InputValue(jsFromServer) {
     const self = this;
-    let hasData = false;
+    self.templatesName = "input-value-template";
+    self.textInput = ko.observable("")
+    self.addQuotes = ko.observable(false);
+    
     if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
-        hasData = true
+        ko.mapping.fromJS(jsFromServer, {}, self)
     }
-    self.textInput = ko.observable(hasData ? jsFromServer.textInput : "")
-    self.addQuotes = ko.observable(hasData ? jsFromServer.addQuotes : false);
     self.text = ko.computed(function () {
         if (self.addQuotes()) {
             return `"${self.textInput()}"`;
@@ -1416,8 +1420,8 @@ function ViewModel(data, localParams, jsonFromServer) {
         return self.group().text();
     });
 }
-ViewModel.prototype.toJSON = function (){
-    var copy = ko.toJS(this); 
-    delete copy.text; 
-    return copy; 
+ViewModel.prototype.toJSON = function () {
+    var copy = ko.toJS(this);
+    delete copy.text;
+    return copy;
 }
