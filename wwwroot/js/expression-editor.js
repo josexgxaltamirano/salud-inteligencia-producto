@@ -585,7 +585,7 @@ function FilterLocalParams(data, jsFromServer) {
             }
             if (dataType === DATA_TYPE_LIST && self.addFunctionForList()) {
                 if (hasData) {
-                    return new ActionListOptions(self.selectedOption().dataType, jsFromServer.action)
+                    return new ActionListOptions(self.selectedOption(), jsFromServer.action)
                 }
                 return new ActionListOptions(self.selectedOption())
             }
@@ -907,10 +907,10 @@ function ActionListOptions(data, jsFromServer) {
     let posSelectedFunction = 0;
     if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
         hasData = true;
-        posSelectedFunction = getObjectByIdValue(jsFromServer.selectedFunction, listFunctions)
+        posSelectedFunction = getObjectById(jsFromServer.selectedFunction, listFunctions)
     }
     self.listOperations = ko.observableArray(listFunctions);
-    self.selectedFunction = ko.observable(listFunctions[posSelectedFunction].id);
+    self.selectedFunction = ko.observable(self.listOperations()[posSelectedFunction]);
     self.classDFlex = ko.computed(function () {
         if (self.selectedFunction()) {
             if (self.selectedFunction().id === FUNCTION_EQUAL || self.selectedFunction().id === FUNCTION_NOT_EQUAL) {
@@ -956,7 +956,7 @@ function ActionListOptions(data, jsFromServer) {
                             return new ActionList(data, FUNCTION_DISTINCT, jsFromServer.action)
                         }
                     }
-                    return new ActionList(data, FUNCTION_DISTINCT);;
+                    return new ActionList(data, FUNCTION_DISTINCT);
                 case FUNCTION_COUNT:
                     if (hasData) {
                         if (jsFromServer.action.templateName === FUNCTION_COUNT) {
