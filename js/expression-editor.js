@@ -957,6 +957,7 @@ function ActionListOptions(data, jsFromServer) {
                         }
                     }
                     return new ActionList(data, FUNCTION_DISTINCT);
+
                 case FUNCTION_COUNT:
                     if (hasData) {
                         if (jsFromServer.action.templateName === FUNCTION_COUNT) {
