@@ -17,6 +17,9 @@
 .custom-datatable-content-width {
     max-width: 100px;
 }
+.bg-salud {
+    background-color: #0060AC !important;
+}
 
 .btn-primary {
     border-color: #0060AC !important;
