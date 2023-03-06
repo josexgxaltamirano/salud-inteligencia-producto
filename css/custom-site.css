@@ -1,7 +1,24 @@
-﻿.custom-list-group {
+﻿.bg-salud {
+    background-color: #0060AC !important;
+}
+
+.color-salud-blue {
+    color: #0060AC !important;
+}
+
+.custom-list-group {
     max-height: 75vh;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+}
+
+.custom-pointer {
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.custom-h3:hover {
+    color: #0060AC;
 }
 
 .custom-datatable-content {
