@@ -12,8 +12,9 @@
 }
 
 #operators_properties, #plan_properties, #user_properties, #global_params {
-    min-height: 28rem;
-    max-height: 28rem;
+    /* min-height: 28rem;
+    max-height: 28rem;*/
+    height: 1vh;
     overflow: auto;
 }
 
