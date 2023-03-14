@@ -102,6 +102,7 @@
             color: #000000;
             line-height: calc(2 * var(--radius) - 2px);
             text-align: center;
+            border-radius: 0.25rem;
         }
 
     .tree details[open] > summary::before {
