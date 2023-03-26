@@ -1,1427 +1,1164 @@
-const ID_SALUD = "salud";
-const ID_LOCAL_PARAMS = "localParams";
-const DATA_TYPE_STRING = "string";
-const DATA_TYPE_NUMERIC = "numeric";
-const DATA_TYPE_DATETIME = "dateTime";
-const DATA_TYPE_OBJECT = "object";
-const DATA_TYPE_BOOLEAN = "boolean";
-const DATA_TYPE_LIST = "list";
-const FUNCTION_WHERE = "Where";
-const FUNCTION_SELECT = "Select";
-const FUNCTION_DISTINCT = "Distinct";
-const FUNCTION_COUNT = "Count"
-const FUNCTION_SUM = "Sum";
-const FUNCTION_FIRST = "First";
-const FUNCTION_FIRSTORDEFAULT = "FirstOrDefault";
-const FUNCTION_ANY = "Any";
-const FUNCTION_EQUAL = "==";
-const FUNCTION_NOT_EQUAL = "!=";
-const IS_NULL = 'null';
-const FILTER_TEMPLATE_NAME = "filter-template";
-const FILTER_LOCAL_PARAM_TEMPLATE_NAME = "filter-localparams-template";
-let dataGlobal = {};
-let localParamsGlobal = [];
-//costantes para clase d-flex de bootstrap
-const CLASS_D_FLEX = "d-flex align-items-start";
-const operators = [
-    new Operator("Igual", "==", [DATA_TYPE_STRING, DATA_TYPE_NUMERIC, DATA_TYPE_DATETIME, DATA_TYPE_BOOLEAN]),
-    new Operator("No es igual", "!=", [DATA_TYPE_STRING, DATA_TYPE_NUMERIC, DATA_TYPE_DATETIME, DATA_TYPE_BOOLEAN]),
-    new Operator("Es menor", "<", [DATA_TYPE_NUMERIC, DATA_TYPE_DATETIME]),
-    new Operator("Es mayor", ">", [DATA_TYPE_NUMERIC, DATA_TYPE_DATETIME]),
-    new Operator("Es menor o igual", "<=", [DATA_TYPE_NUMERIC, DATA_TYPE_DATETIME]),
-    new Operator("Es mayor o igual", ">=", [DATA_TYPE_NUMERIC, DATA_TYPE_DATETIME]),
-    new Operator("Suma", "+", []),
-    new Operator("Resta", "-", []),
-    new Operator("Multiplicaci\u00F3n", "*", []),
-    new Operator("Divisi\u00F3n", "/", []),
-    new Operator("Operador condicional ternario (?)", "?", []),
-    new Operator("Separador condicional ternario (:)", ":", [])
-];
+const modal = new bootstrap.Modal(
+  document.getElementById("defaultModalPrimary")
+);
 
+const CONTEXT_RULE = "ruleExpression";
+const CONTEXT_SUCCESS_EVENT = "successEvent";
+const CONTEXT_FAILURE_EVENT = "failureExpression";
+const CONTEXT_COMPLEX_RULE = "complex-ruleExpression";
+const CONTEXT_COMPLEX_SUCCESS_EVENT = "complex-successExpression";
+const CONTEXT_COMPLEX_FAILURE_EVENT = "complex-failureExpression";
 
-const domainVariables = [
-    { name: "Salud", id: ID_SALUD },
-    { name: "Parametros locales", id: ID_LOCAL_PARAMS }
-];
-let addedProperties = [];
+const userParametersCode = "INPUT_USR_RULE";
+const planParametersCode = "INPUT_USR_PLAN";
+const operatorParametersCode = "INPUT_USR_OP";
 
-const listFunctions = [
-    {
-        name: "Incluye (Where)",
-        id: FUNCTION_WHERE
-    },
-    {
-        name: "Seleccionar (Select)",
-        id: FUNCTION_SELECT
-    },
-    {
-        name: "Sumar (Sum)",
-        id: FUNCTION_SUM
-    },
-    {
-        name: "Eliminar Duplicados (Distinct)",
-        id: FUNCTION_DISTINCT
-    },
-    {
-        name: "Contabilizar Registros (Count)",
-        id: FUNCTION_COUNT
-    },
-    {
-        name: "Primer registro (First)",
-        id: FUNCTION_FIRST
-    },
-    {
-        name: "Primer registro o por defecto (FirstOrDefault)",
-        id: FUNCTION_FIRSTORDEFAULT
-    },
-    {
-        name: "Cualquier registro cumple la condici\u00F3n (Any)",
-        id: FUNCTION_ANY
-    },
-    {
-        name: "No es igual (!=)",
-        id: FUNCTION_NOT_EQUAL
-    },
-    {
-        name: "Es igual (==)",
-        id: FUNCTION_EQUAL
-    },
-]
+const idParameters = "parametros";
+const idPlanParameter = "plan";
+const idUserParameter = "usuario";
 
-const listFunctionConvert = [
-    { name: "Convertir en entero (ToInt32)", id: "Convert.ToInt32" },
-    { name: "Convertir en decimal (ToDouble)", id: "Convert.ToDouble" }
-]
+let contextEditor = "";
+let modalGlobalParamOpen = false;
+let dataInputs = [];
+let dataGlobal = [];
+let dataOperators = [];
 
-const listFunctionConvertConcat = [
-    { name: "Convertir en min\u00fascula", id: "ToLower()" },
-    { name: "Convertir en may\u00fascula", id: "ToUpper()" },
-    { name: "Convertir en decimal (TotalDays)", id: "TotalDays()" }
-];
+let ruleUserOrPlanInputs = [];
+let ruleGlobalParams = [];
 
-const booleanValues = [
-    { name: "Verdadero", value: "true" },
-    { name: "Falso", value: "false" }
-];
+let responseInputData;
+let responseGlobalData;
 
-const logicalOperators = [
-    new LogicalOperator("Todas las condiciones se deben cumplir (And)", "&&"),
-    new LogicalOperator("Una de las condiciones se debe cumplir (Or)", "||"),
-]
+let newRuleModalInstance = null;
 
-function Group(classes, jsFromServer) {
-    const self = this;
-    self.classes = "";
-    if (classes !== "" || classes !== null) {
-        self.classes = classes;
+let operatorsRegex = "";
+let regexString = "";
+let concatenatedData = [];
+
+$(document).ready(function () {
+  let modalExpressionRule = document.getElementById("defaultModalPrimary");
+  modalExpressionRule.addEventListener("hidden.bs.modal", function () {
+    cleanInputsExpression();
+  });
+
+  $(".openModalExpressionRule").click(function () {
+    contextEditor = $(this)[0].dataset.context;
+    ruleUserOrPlanInputs = [];
+    ruleGlobalParams = [];
+    populateEditorData();
+    populateExpressions(contextEditor);
+    disableFinalTreeItemClick();
+    modal.show();
+  });
+
+  $("#openTestRuleModal").click(function () {
+    if (!validateExpression()) {
+      return;
     }
-    self.templateName = 'group-template';
-    self.children = ko.observableArray();
-    self.logicalOperators = ko.observableArray(logicalOperators);
-    self.np = ko.observable(false)
-    self.selectedLogicalOperator = ko.observable(logicalOperators[0].value);
-
-    if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
-        var mapping = {
-            'children': {
-                create: function (options) {
-                    var data = options.data;
-                    if (data.templateName === 'group-template') {
-                        return new Group(data.classes, data);
-                    }
-                    else {
-                        return new ExpressionSelectObject(data.classes, data);
-                    }
-                }
-            },
-        }
-        ko.mapping.fromJS(jsFromServer, mapping, self)
-    }
-    // give the group a single default condition
-    self.addCondition = function () {
-        self.children.push(new Condition());
+    let expression = $("#input_expression").val();
+    let usedParams = GetUsedParams(dataInputs, dataGlobal, expression);
+    let url = "./CreateSimple2?handler=TestData";
+    let data = {
+      inputs: usedParams.arrayInputUser,
+      globalParams: usedParams.arrayGlobalParams,
+      expression: expression,
     };
-    self.addExpression = function () {
-        self.children.push(new ExpressionSelectObject());
+    $.ajax({
+      type: "POST",
+      url: url,
+      data: data,
+      headers: {
+        RequestVerificationToken: $("@Html.AntiForgeryToken()").val(),
+      },
+      success: function (response) {
+        $("#testRuleContent").html(response);
+      },
+    });
+    const testRuleModal = new bootstrap.Modal(
+      document.getElementById("testExpressionModal")
+    );
+    testRuleModal.show();
+    //modal.hide();
+  });
+
+  //guardar expression de la regla
+  $("#saveRuleExpression").click(function (event) {
+    if (!validateExpression()) {
+      return;
+    }
+    if (contextEditor === CONTEXT_RULE) {
+      $("#RuleData_Expression").val($("#input_expression").val());
+    }
+    if (contextEditor === CONTEXT_SUCCESS_EVENT) {
+      $("#RuleData_OnSuccessExpression").val($("#input_expression").val());
+      $("#Rule_RuleData_OnSuccessExpression").val($("#input_expression").val());
+    }
+    if (contextEditor === CONTEXT_FAILURE_EVENT) {
+      $("#RuleData_OnFailureExpression").val($("#input_expression").val());
+      $("#Rule_RuleData_OnFailureExpression").val($("#input_expression").val());
+    }
+    if (contextEditor === CONTEXT_COMPLEX_RULE) {
+      $("#ComplexExpression").val($("#input_expression").val());
+      actionOnNewRuleModal("show");
+    }
+    if (contextEditor === CONTEXT_COMPLEX_SUCCESS_EVENT) {
+      $("#ComplexOnSuccessExpression").val($("#input_expression").val());
+      actionOnNewRuleModal("show");
+    }
+    if (contextEditor === CONTEXT_COMPLEX_FAILURE_EVENT) {
+      $("#ComplexOnFailureExpression").val($("#input_expression").val());
+      actionOnNewRuleModal("show");
+    }
+
+    modal.hide();
+  });
+  actionsModals();
+  getRegularExpression();
+  function disableFinalTreeItemClick() {
+    const divs = document.getElementsByClassName("finals");
+    for (let i = 0, len = divs.length; i < len; i++) {
+      divs[i].addEventListener("click", function (e) {
+        e.preventDefault();
+      });
+    }
+  }
+
+  function cleanInputsExpression() {
+    document.getElementById("expression-title").innerHTML = "";
+    document.getElementById("expression-objective").innerHTML = "";
+    $("#input_expression").val("");
+    $("#searchBarUser").val("");
+    $("#searchBarPlan").val("");
+  }
+
+  let previousValues = $("#Rule_JsonData").val();
+  if (previousValues) {
+    getPreviousValues(previousValues);
+  }
+  function getPreviousValues(values) {
+    var previousValueJson = JSON.parse(values);
+    previousValueJson.forEach((prev) => {
+      if (prev.id.includes("Rule_ChildrenRuleData")) {
+        concatenatedData.push(prev);
+      } else {
+        $(`#${prev.id}`).val(prev.value);
+      }
+    });
+    if (concatenatedData.length > 0) {
+      //console.log(concatenatedData)
+    }
+  }
+});
+
+function saveRuleExpression() {
+  if (!validateExpression()) {
+    return;
+  }
+  if (contextEditor === CONTEXT_RULE) {
+    $("#RuleData_Expression").val($("#input_expression").val());
+  }
+  if (contextEditor === CONTEXT_SUCCESS_EVENT) {
+    $("#RuleData_OnSuccessExpression").val($("#input_expression").val());
+  }
+  if (contextEditor === CONTEXT_FAILURE_EVENT) {
+    $("#RuleData_OnFailureExpression").val($("#input_expression").val());
+  }
+  if (contextEditor === CONTEXT_COMPLEX_RULE) {
+    $("#ComplexExpression").val($("#input_expression").val());
+    actionOnNewRuleModal("show");
+  }
+  if (contextEditor === CONTEXT_COMPLEX_SUCCESS_EVENT) {
+    $("#ComplexOnSuccessExpression").val($("#input_expression").val());
+    actionOnNewRuleModal("show");
+  }
+  if (contextEditor === CONTEXT_COMPLEX_FAILURE_EVENT) {
+    $("#ComplexOnFailureExpression").val($("#input_expression").val());
+    actionOnNewRuleModal("show");
+  }
+}
+
+function populateEditorData() {
+  let url = "./CreateSimple2?handler=PopulateEditorData";
+  $.ajax({
+    dataType: "JSON",
+    type: "GET",
+    url: url,
+    headers: { RequestVerificationToken: $("@Html.AntiForgeryToken()").val() },
+  }).done(function (response) {
+    let notificationCreate = {
+      type: "error",
+      message: "No se puede obtener el listado",
+      duration: 5000,
+      ripple: true,
+      dismissible: false,
+      position: {
+        x: "center",
+        y: "top",
+      },
     };
-    self.addGroup = function () {
-        self.children.push(new Group("my-2 p-0 border-0"));
-    };
-    self.removeChild = function (child) {
-        self.children.remove(child);
-    };
-    // the text() function is just an example to show output
-    self.text = ko.computed(function () {
-        let result = '';
-        if (self.np()) {
-            result = "np(";
-        }
-        else {
-            result = "(";
-        }
-        let op = '';
-        for (const child of self.children()) {
-            result += op + child.text();
-            op = ` ${self.selectedLogicalOperator()} `;
-        }
-        result += ')'
-        return result;
-    });
-
-}
-Group.prototype.toJSON = function () {
-    var copy = ko.toJS(this);
-    delete copy.logicalOperators;
-    delete copy.text;
-    return copy;
-}
-//Group.mapping = {
-//    create: function (options) {
-//        return new ExpressionSelectObject("")
-//    },
-//    key: function (data) {
-//        return ko.unwrap(data.children)
-//    }
-//}
-
-function Condition(classes) {
-    const self = this;
-    self.classes = "";
-    if (classes === "" || classes === null) {
-        self.classes = classes;
-    }
-    self.templateName = 'condition-template';
-    self.fieldLeft = ko.observable(new FilterSimple(dataGlobal));
-    self.comparisons = ko.observableArray(operators);
-    self.selectedComparison = ko.observable(operators[0].value);
-    self.fieldRight = ko.observable(new FilterSimple(dataGlobal));
-    // the text() function is just an example to show output
-    self.text = ko.computed(function () {
-        return `${self.fieldLeft().text()} ${self.selectedComparison()} ${self.fieldRight().text()}`;
-    });
-}
-
-function ExpressionSelectObject(classes, jsFromServer) {
-    const self = this;
-    self.classes = "";
-    if (classes === "" || classes === null) {
-        self.classes = classes;
-    }
-    self.templateName = 'expression-template-object';
-
-    self.childrens = ko.observableArray();
-
-    if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
-        var mapping = {
-            'childrens': {
-                create: function (options) {
-                    var data = options.data;
-                    if (data.templatesName === 'select-variable-type-template') {
-                        return new SelectVariableType(data)
-                    }
-                    else if (data.templatesName === 'operation-template') {
-                        return new Operation(data)
-                    }
-                    else if (data.templatesName === 'grouper-template') {
-                        return new Grouper(data)
-                    }
-                    else if (data.templatesName === 'expression-json-grouper-template') {
-                        return new ExpressionJsonGrouper(data)
-                    }
-                }
-            },
-            'ignore': ['text']
-        }
-        ko.mapping.fromJS(jsFromServer, mapping, self)
-    }
-
-    self.addVariable = function () {
-        self.childrens.push(new SelectVariableType())
-    }
-    self.addOperator = function () {
-        self.childrens.push(new Operation())
-    }
-    self.addGrouper = function () {
-        self.childrens.push(new Grouper())
-    }
-    self.addExpressionJsonObject = function () {
-        self.childrens.push(new ExpressionJsonGrouper());
-    }
-    self.removeChild = function (child) {
-        self.childrens.remove(child);
-    }
-    self.text = ko.computed(function () {
-        let result = "";
-        let space = "";
-
-        for (const children of self.childrens()) {
-            result += space + children.text();
-            space = " ";
-        }
-        return result;
-    })
-}
-ExpressionSelectObject.prototype.toJSON = function () {
-    var copy = ko.toJS(this);
-    delete copy.classes;
-    delete copy.text;
-    return copy;
-}
-//ExpressionSelectObject.mapping = {
-//    create: function (options) {
-//        return new ExpressionSelectObject();
-//    }
-
-//}
-
-function ExpressionSelectObjectFromList(classes, dataList, jsFromServer) {
-    const self = this;
-    self.listName = `Agregar variable de ${dataList.name}`
-    self.classes = "";
-    if (classes === "" || classes === null) {
-        self.classes = classes;
-    }
-    self.templateName = 'expression-object-list-template';
-    self.childrens = ko.observableArray();
-
-    if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
-        var mapping = {
-            'childrens': {
-                create: function (options) {
-                    var data = options.data;
-                    if (data.templatesName === 'select-variable-type-template') {
-                        return new SelectVariableType(data)
-                    }
-                    else if (data.templatesName === 'operation-template') {
-                        return new Operation(data)
-                    }
-                    else if (data.templatesName === 'grouper-template') {
-                        return new Grouper(data)
-                    }
-                    else if (data.templatesName === 'expression-json-grouper-template') {
-                        return new ExpressionJsonGrouper(data)
-                    }
-                    else if (data.templatesName === "filter-localparams-container-template") {
-                        return new FilterLocalParamsContainer(dataList.childrens, data)
-                    }
-                }
-            },
-            'ignore': ['text']
-        }
-        ko.mapping.fromJS(jsFromServer, mapping, self)
-    }
-
-    self.addPropertyVariable = function () {
-        self.childrens.push(new FilterLocalParamsContainer(dataList.childrens))
-    }
-    self.addVariable = function () {
-        self.childrens.push(new SelectVariableType())
-    }
-    self.addOperator = function () {
-        self.childrens.push(new Operation())
-    }
-    self.addGrouper = function () {
-        self.childrens.push(new Grouper())
-    }
-    self.addExpressionJsonObject = function () {
-        self.childrens.push(new ExpressionJsonGrouper());
-    }
-    self.removeChild = function (child) {
-        self.childrens.remove(child);
-    }
-    self.text = ko.computed(function () {
-        let result = "";
-        let space = "";
-
-        for (const children of self.childrens()) {
-            result += space + children.text();
-            space = " ";
-        }
-        return result;
-    })
-}
-ExpressionSelectObjectFromList.prototype.toJSON = function () {
-    var copy = ko.toJS(this);
-    delete copy.classes;
-    delete copy.listName;
-    delete copy.text;
-    return copy;
-}
-
-function Grouper(jsFromServer) {
-    const self = this;
-    let pos = 0;
-    let hasData = false;
-    if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
-        hasData = true
-        pos = getObjectById(jsFromServer.selectedFunction, listFunctionConvertConcat)
-    }
-    self.templatesName = 'grouper-template';
-    self.addFunctionToGrouper = ko.observable(hasData ? jsFromServer.addFunctionToGrouper : false)
-    self.denyGrouper = ko.observable(hasData ? jsFromServer.denyGrouper : false)
-    self.functions = ko.observableArray(listFunctionConvertConcat);
-    self.selectedFunction = ko.observable(listFunctionConvertConcat[pos]);
-    const actionTemp = (hasData ? new ExpressionSelectObject("", jsFromServer.action) : new ExpressionSelectObject())
-    self.action = ko.observable(actionTemp)
-    self.text = ko.computed(function () {
-        let text = ""
-        if (self.addFunctionToGrouper() && self.selectedFunction()) {
-            text = `(${self.action().text()}).${self.selectedFunction().id}`;
-        } else {
-            text = `(${self.action().text()})`;
-        }
-        if (self.denyGrouper()) {
-            text = "!" + text;
-        }
-        return text;
-    })
-}
-Grouper.prototype.toJSON = function () {
-    var copy = ko.toJS(this);
-    delete copy.classes;
-    delete copy.functions;
-    delete copy.text;
-    return copy;
-}
-
-function Expression(classes, jsFromServer) {
-    const self = this;
-    let posDomain = 0;
-    var hasData = false;
-    if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
-        hasData = true
-        posDomain = getObjectById(jsFromServer.selectedDomain, domainVariables)
-    }
-    self.classes = "";
-    if (classes === "" || classes === null) {
-        self.classes = classes;
-    }
-    self.domains = ko.observableArray(domainVariables)
-    self.selectedDomain = ko.observable(domainVariables[posDomain])
-    self.templatesName = 'expression-template';
-    self.filter = ko.computed(function () {
-        if (self.selectedDomain()) {
-            if (self.selectedDomain().id === ID_SALUD) {
-                if (hasData) {
-                    if (jsFromServer.filter.templateName === FILTER_TEMPLATE_NAME) {
-                        return new Filter(dataGlobal, jsFromServer.filter)
-                    }
-                }
-                return new Filter(dataGlobal)
-            }
-            if (self.selectedDomain().id === ID_LOCAL_PARAMS) {
-                if (hasData) {
-                    if (jsFromServer.filter.templateName === FILTER_LOCAL_PARAM_TEMPLATE_NAME) {
-                        return new FilterLocalParams(localParamsGlobal, jsFromServer.filter)
-                    }
-                }
-                return new FilterLocalParams(localParamsGlobal)
-            }
-        }
-        return new ActionNone()
-    });
-    // the text() function is just an example to show output
-    self.text = ko.computed(function () {
-        return self.filter().text();
-    });
-
-}
-Expression.prototype.toJSON = function () {
-    var copy = ko.toJS(this);
-    delete copy.classes;
-    delete copy.domains;
-    delete copy.text;
-    return copy;
-}
-
-function ExpressionJsonGrouper(jsFromServer) {
-    const self = this;
-    var hasData = false;
-    if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
-        hasData = true
-    }
-    self.templatesName = 'expression-json-grouper-template';
-    self.childrens = ko.observableArray()
-    if (hasData) {
-        var mapping = {
-            'childrens': {
-                create: function (options) {
-                    return new ExpressionJsonObject(options.data)
-                }
-            },
-            'ignore': ['text']
-        }
-        ko.mapping.fromJS(jsFromServer, mapping, self)
-    }
-    self.addExpressionJsonObject = function () {
-        self.childrens.push(new ExpressionJsonObject())
-    }
-    self.removeExpressionJsonObject = function (child) {
-        self.childrens.remove(child)
-    }
-    self.text = ko.computed(function () {
-        let result = 'new { ';
-        let op = '';
-        for (const children of self.childrens()) {
-            result += op + children.text();
-            op = ' , ';
-        }
-        result += '}'
-        return result;
-    });
-}
-ExpressionJsonGrouper.prototype.toJSON = function () {
-    var copy = ko.toJS(this);
-    delete copy.text;
-    return copy;
-}
-
-function ExpressionJsonObject(jsFromServer) {
-    const self = this;
-    var hasData = false;
-    if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
-        hasData = true;
-    }
-    self.name = ko.observable(hasData ? jsFromServer.name : "");
-    self.expression = ko.observable(hasData ? new ExpressionSelectObject('', jsFromServer.expression) : new ExpressionSelectObject());
-
-    self.templatesName = "expression-json-object-template"
-    self.text = ko.computed(function () {
-        return `${self.expression().text()} as ${self.name()}`;
-    });
-}
-ExpressionJsonObject.prototype.toJSON = function () {
-    var copy = ko.toJS(this);
-    delete copy.text;
-    return copy;
-}
-
-function Operation(jsFromServer) {
-    const self = this;
-    self.templatesName = 'operation-template';
-    self.options = ko.observableArray(operators);
-    let pos = 0;
-    if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
-        pos = getOperation(jsFromServer.selectedOption)
-    }
-    self.selectedOption = ko.observable(operators[pos])
-    self.text = ko.computed(function () {
-        if (self.selectedOption()) {
-            return self.selectedOption().value
-        }
-        return ""
-    })
-}
-Operation.prototype.toJSON = function () {
-    var copy = ko.toJS(this);
-    delete copy.options;
-    delete copy.text;
-    return copy;
-}
-
-function FilterLocalParamsContainer(data, jsFromServer) {
-    const self = this;
-    var hasData = false;
-    if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
-        hasData = true
-    }
-    self.templatesName = "filter-localparams-container-template";
-    self.action = ko.observable(hasData ? new FilterLocalParams(data, jsFromServer.action) : new FilterLocalParams(data))
-    self.text = ko.computed(function () {
-        return self.action().text();
-    })
-}
-FilterLocalParamsContainer.prototype.toJSON = function () {
-    var copy = ko.toJS(this);
-    delete copy.text;
-    return copy;
-}
-
-function FilterLocalParams(data, jsFromServer) {
-    const self = this;
-    var hasData = false;
-    var posSelectedOption = 0;
-    if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
-        hasData = true;
-        posSelectedOption = getObjectById(jsFromServer.selectedOption, data)
-    }
-    self.childrens = ko.observableArray(data);
-    self.templateName = FILTER_LOCAL_PARAM_TEMPLATE_NAME;
-    self.templatesName = FILTER_LOCAL_PARAM_TEMPLATE_NAME;
-    self.selectedOption = ko.observable(data[posSelectedOption]);
-    self.addComparison = ko.observable(hasData ? jsFromServer.addComparison : false);
-    self.addFunctionToPrimitive = ko.observable(hasData ? jsFromServer.addFunctionToPrimitive : false);
-    self.actionPrimitive = ko.computed(function () {
-        if (self.addFunctionToPrimitive()) {
-            if (hasData) {
-                if (jsFromServer.actionPrimitive.hasOwnProperty("id")) {
-                    return new ActionForPrimitive(jsFromServer.actionPrimitive)
-                }
-            }
-            return new ActionForPrimitive();
-        }
-        return new ActionNone();
-    })
-    self.addFunctionForList = ko.observable(hasData ? jsFromServer.addFunctionForList : false)
-    self.addProperties = function () {
-        addProperties(self.selectedOption());
-    };
-
-    self.action = ko.computed(function () {
-        if (self.selectedOption()) {
-            const dataType = self.selectedOption().dataType;
-            if ((dataType === DATA_TYPE_STRING || dataType === DATA_TYPE_NUMERIC || dataType === DATA_TYPE_DATETIME) && self.addComparison()) {
-                if (hasData) {
-                    return new ActionLogical(self.selectedOption().dataType, jsFromServer.action)
-                }
-                return new ActionLogical(self.selectedOption().dataType)
-            }
-
-            if (dataType === DATA_TYPE_BOOLEAN) {
-                if (hasData) {
-                    return new ActionBoolean(jsFromServer.action);
-                }
-                return new ActionBoolean();
-            }
-            if (dataType === DATA_TYPE_LIST && self.addFunctionForList()) {
-                if (hasData) {
-                    return new ActionListOptions(self.selectedOption().dataType, jsFromServer.action)
-                }
-                return new ActionListOptions(self.selectedOption())
-            }
-            if (dataType === DATA_TYPE_OBJECT) {
-                if (hasData) {
-                    return new Filter(self.selectedOption(), jsFromServer.action)
-                }
-                return new Filter(self.selectedOption())
-            }
-        }
-        return new ActionNone();
-    })
-    self.classDFlex = ko.computed(function () {
-        if (self.selectedOption()) {
-            const dataType = self.selectedOption().dataType;
-            if (dataType === DATA_TYPE_NUMERIC || dataType === DATA_TYPE_DATETIME || dataType === DATA_TYPE_BOOLEAN || dataType === DATA_TYPE_STRING) {
-                return "d-flex align-items-start";
-            }
-        }
-        return "";
-    });
-
-    self.text = ko.computed(function () {
-        if (self.selectedOption()) {
-            if (self.selectedOption().dataType === DATA_TYPE_OBJECT) {
-                return self.actionPrimitive().text() + self.action().text();
-            }
-            return self.selectedOption().id + self.actionPrimitive().text() + self.action().text();
-        }
-        return "";
-    })
-}
-FilterLocalParams.prototype.toJSON = function () {
-    var copy = ko.toJS(this);
-    delete copy.childrens;
-    delete copy.classDFlex;
-    delete copy.text;
-    return copy;
-}
-
-
-function Filter(data, jsFromServer) {
-    const self = this;
-    let hasData = false;
-    let posOptionSelected = 0;
-    if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
-        hasData = true;
-    }
-    const childrens = ko.utils.arrayMap(data.childrens, function (c) {
-        if (hasData && jsFromServer.hasOwnProperty('optionSelected')) {
-            if (jsFromServer.optionSelected.hasOwnProperty('id')) {
-                if (c.id === jsFromServer.optionSelected.id) {
-                    return new Filter(c, jsFromServer.optionSelected)
-                }
-            }
-        }
-        return new Filter(c);
-    })
-    if (hasData && jsFromServer.hasOwnProperty('optionSelected')) {
-        posOptionSelected = getObjectById(jsFromServer.optionSelected, ko.toJS(childrens))
-    }
-    self.templateName = FILTER_TEMPLATE_NAME;
-    self.dataType = ko.observable(hasData ? jsFromServer.dataType : data.dataType);
-    self.name = ko.observable(hasData ? jsFromServer.name : data.name);
-    self.id = ko.observable(hasData ? jsFromServer.id : data.id);
-    self.childrens = ko.observableArray(childrens);
-    //self.optionSelected = ko.observable(childrens[posOptionSelected]);
-    if (hasData && self.childrens().length > 0) {
-        self.optionSelected = ko.observable(self.childrens()[posOptionSelected]);
+    if (response.success) {
+      responseInputData = response.message.inputUser;
+      responseGlobalData = response.message.globalParams;
+      populateOperators(response.message.inputUser);
+      populatePlans(response.message.inputUser);
+      populateUser(response.message.inputUser);
+      populateGlobalParams(response.message.globalParams);
     } else {
-        self.optionSelected = ko.observable();
+      showNotification(notificationCreate);
     }
-    self.showChildren = ko.computed(function () {
-        return self.optionSelected() && self.optionSelected().childrens().length > 0;
-    });
-    self.addComparison = ko.observable(hasData ? jsFromServer.addComparison : false);
-    self.addFunctionToPrimitive = ko.observable(hasData ? jsFromServer.addFunctionToPrimitive : false);
-    self.actionPrimitive = ko.computed(function () {
-        if (self.addFunctionToPrimitive()) {
-            if (hasData) {
-                if (jsFromServer.actionPrimitive.hasOwnProperty("id")) {
-                    return new ActionForPrimitive(jsFromServer.actionPrimitive)
-                }
-            }
-            return new ActionForPrimitive();
+  });
+}
+
+function populateExpressions(contextEditor) {
+  let ruleType = $("#Type").val();
+  let ruleName = "";
+  let ruleDescription = "";
+  if (ruleType === "simple") {
+    ruleName = $("#Name").val();
+    ruleDescription = $("#Description").val();
+  } else {
+    ruleName = $("#Rule_Name").val();
+    ruleDescription = $("#Rule_Description").val();
+  }
+  let inputExpressionControl = $("#input_expression");
+  let expressionTitleControl = $("#expression-title");
+  let expressionObjectiveControl = $("#expression-objective");
+  switch (contextEditor) {
+    case CONTEXT_RULE:
+      inputExpressionControl.val($("#RuleData_Expression").val());
+      expressionTitleControl.append(
+        "Agregar expresión " +
+          (ruleName !== ""
+            ? "a la <strong>Regla: " + ruleName + "</strong>"
+            : "")
+      );
+      expressionObjectiveControl.append(
+        ruleDescription !== ""
+          ? "<strong>Descripción: </strong>" + ruleDescription
+          : ""
+      );
+      break;
+    case CONTEXT_SUCCESS_EVENT:
+      inputExpressionControl.val($("#RuleData_OnSuccessExpression").val());
+      expressionTitleControl.append(
+        "Agregar evento exitoso " +
+          (ruleName !== ""
+            ? "a la <strong>Regla: " + ruleName + "</strong>"
+            : "")
+      );
+      expressionObjectiveControl.append(
+        ruleDescription !== ""
+          ? "<strong>Descripción:</strong>" + ruleDescription
+          : ""
+      );
+      break;
+    case CONTEXT_FAILURE_EVENT:
+      inputExpressionControl.val($("#RuleData_OnFailureExpression").val());
+      expressionTitleControl.append(
+        "Agregar evento fallido " +
+          (ruleName !== ""
+            ? "a la <strong>Regla: " + ruleName + "</strong>"
+            : "")
+      );
+      expressionObjectiveControl.append(
+        ruleDescription !== ""
+          ? "<strong>Descripción: </strong>" + ruleDescription
+          : ""
+      );
+      break;
+    case CONTEXT_COMPLEX_RULE:
+      inputExpressionControl.val($("#ComplexExpression").val());
+      expressionTitleControl.append(
+        "Agregar expresión " +
+          (ruleName !== ""
+            ? "a la <strong>Regla: " + ruleName + "</strong>"
+            : "")
+      );
+      expressionObjectiveControl.append(
+        ruleDescription !== ""
+          ? "<strong>Descripción: </strong>" + ruleDescription
+          : ""
+      );
+      actionOnNewRuleModal("hide");
+      break;
+    case CONTEXT_COMPLEX_SUCCESS_EVENT:
+      inputExpressionControl.val($("#ComplexOnSuccessExpression").val());
+      expressionTitleControl.append(
+        "Agregar evento exitoso " +
+          (ruleName !== ""
+            ? "a la <strong>Regla: " + ruleName + "</strong>"
+            : "")
+      );
+      expressionObjectiveControl.append(
+        ruleDescription !== ""
+          ? "<strong>Descripción: </strong>" + ruleDescription
+          : ""
+      );
+      actionOnNewRuleModal("hide");
+      break;
+    case CONTEXT_COMPLEX_FAILURE_EVENT:
+      inputExpressionControl.val($("#ComplexOnFailureExpression").val());
+      expressionTitleControl.append(
+        "Agregar evento fallid " +
+          (ruleName !== ""
+            ? "a la <strong>Regla: " + ruleName + "</strong>"
+            : "")
+      );
+      expressionObjectiveControl.append(
+        ruleDescription !== ""
+          ? "<strong>Descripción: </strong>" + ruleDescription
+          : ""
+      );
+      actionOnNewRuleModal("hide");
+      break;
+  }
+}
+
+function populateOperators(parameters) {
+  let operators = parameters.find(
+    (parameter) => parameter.inputTypeCode === operatorParametersCode
+  );
+  $("#operators_properties").html(renderOperatorsListHtml(operators, true));
+}
+
+function populatePlans(parameters) {
+  let plans = parameters.find(
+    (parameter) => parameter.inputTypeCode === planParametersCode
+  );
+  $("#plan_properties").html(renderPlanAndUserListHtml(plans, ""));
+}
+
+function populateUser(parameters) {
+  let userProperties = parameters.find(
+    (parameter) => parameter.inputTypeCode === userParametersCode
+  );
+  $("#user_properties").html(renderPlanAndUserListHtml(userProperties, ""));
+}
+
+function populateGlobalParams(parameters) {
+  $("#global_params").html(renderGlobalParamsHtml(parameters));
+}
+
+function renderOperatorsListHtml(item, addToRegex) {
+  let html = "";
+  if (item.children && item.children.length > 0) {
+    html += `<ul id="${item.name}" class="editor-item-list tree">`;
+    item.children.forEach((child) => {
+      let metadata = JSON.parse(child.metaData);
+      if (child.children && child.children.length > 0) {
+        html += `
+                        <li>
+                            <details>
+                                <summary>
+                                    <div class="editor-item-list finals">
+                                        <a class="final operator-selectable"
+                                            data-id-item="${child.name}"
+                                            data-is-addable="${metadata.isAddable}"
+                                            data-add-blank-space="${metadata.addBlankSpace}">
+                                                ${child.name}
+                                        </a>
+                                    </div>
+                                </summary>`;
+        html += renderOperatorsListHtml(
+          child,
+          !(
+            child.name.toUpperCase().trim() === "AGRUPADORES" ||
+            child.name.toUpperCase().trim() === "FUNCIONES DE LISTA"
+          )
+        );
+        html += `</details>
+                        </li > `;
+      } else {
+        html += `< li class="editor-item-list" >
+    <a class="final operator-selectable"
+        data-id-item="${child.name}"
+        data-is-addable="${metadata.isAddable}"
+        data-add-blank-space="${metadata.addBlankSpace}">
+        ${child.name}
+    </a> ${
+      metadata.isAddable
+        ? "<i class='fa-sharp fa-regular fa-circle-question user-input-help' data-title='" +
+          metadata.help.title +
+          "' data-description='" +
+          child.description +
+          "' data-example='" +
+          metadata.help.example +
+          "' ></i>"
+        : ""
+    }
+                            </li > `;
+        if (addToRegex && child.name !== "np") {
+          operatorsRegex += "[" + child.name + "]|";
         }
-        return new ActionNone();
-    })
-    self.addFunctionForList = ko.observable(hasData ? jsFromServer.addFunctionForList : false)
-    self.addProperties = function () {
-        addProperties(self.optionSelected());
+        dataOperators.push(child.name);
+      }
+    });
+    html += "</ul>";
+  }
+  return html;
+}
+
+function renderPlanAndUserListHtml(item, open) {
+  let html = "";
+  if (item.children && item.children.length > 0) {
+    html += `< ul id = "${item.name}" data - data - type="${item.type}" class="editor-item-list tree" > `;
+    item.children.forEach((child) => {
+      if (child.children && child.children.length > 0) {
+        html += `< li >
+    <details ${open}>
+        <summary>
+            <div class="editor-item-list ps-2">
+                <span class="final property-selectable"
+                    data-data-type="${child.type}"
+                    data-id-item="${child.name}">
+                    ${child.name} <em class="fs-6">(${child.type})</em>
+                </span>
+                <i class="fa-sharp fa-regular fa-circle-question user-input-help" data-title="${child.name}" data-description="${child.description}"></i>
+            </div>
+        </summary>`;
+        html += renderPlanAndUserListHtml(child, open);
+        html += "</details></li > ";
+        dataInputs.push(child.name);
+      } else {
+        html += `<li>
+                                <div>
+                                    <div>
+                                        <div class="editor-item-list">
+                                            <span class="final property-selectable" 
+                                                data-data-type="${child.type}" 
+                                                data-id-item="${child.name}">
+                                                    ${child.name} <em class="fs-6">(${child.type})</em>
+                                            </span>
+                                            <i class="fa-sharp fa-regular fa-circle-question user-input-help" data-title="${child.name}" data-description="${child.description}"></i>
+                                        </div>
+                                    </div>`;
+        html += renderPlanAndUserListHtml(child, open);
+        html += "</div></li>";
+        dataInputs.push(child.name);
+      }
+    });
+    html += "</ul>";
+  }
+  return html;
+}
+
+function searchParameter(context) {
+  let input = "";
+  let data = {};
+  if (context === "plan_properties") {
+    input = document.getElementById("searchBarPlan").value;
+    data = responseInputData.find(
+      (parameter) => parameter.inputTypeCode === planParametersCode
+    );
+  } else if (context === "user_properties") {
+    input = document.getElementById("searchBarUser").value;
+    data = responseInputData.find(
+      (parameter) => parameter.inputTypeCode === userParametersCode
+    );
+  } else if (context === "global_params") {
+    input = document.getElementById("searchBarGlobalParam").value;
+    data = responseGlobalData;
+  }
+  input = input.toLowerCase();
+  if (context === "global_params") {
+    if (input.length > 0) {
+      const result = searchSimpleObject(data, input);
+      if (result.length > 0) {
+        $(`#${context}`).html(renderGlobalParamsHtml(result));
+      } else {
+        $(`#${context}`).html("No hay coincidencias");
+      }
+    } else {
+      $(`#${context}`).html(renderGlobalParamsHtml(data));
+    }
+  } else {
+    if (input.length > 0) {
+      const result = searchObject(data, input);
+      if (result !== null) {
+        $(`#${context}`).html(renderPlanAndUserListHtml(result, "open"));
+      } else {
+        $(`#${context}`).html("No hay coincidencias");
+      }
+    } else {
+      $(`#${context}`).html(renderPlanAndUserListHtml(data, ""));
+    }
+  }
+}
+
+function searchObject(item, query) {
+  if (item.name.toLowerCase().search(query) != -1) {
+    return { ...item, children: item.children };
+  }
+  const childrens = item.children
+    .map((child) => searchObject(child, query))
+    .filter(Boolean);
+  return childrens.length > 0 ? { ...item, children: childrens } : null;
+}
+
+function searchSimpleObject(item, query) {
+  return item.filter((child) => child.name.toLowerCase().search(query) != -1);
+}
+
+function renderGlobalParamsHtml(items) {
+  let html = `<ul class="editor-item-list">`;
+  for (const item of items) {
+    html += `<li>
+                    <div class="editor-item-list ps-2">
+                        <span 
+                            class="final parameter-selectable" 
+                            data-expression="${item.expression}"
+                            data-id-item="${item.name}">        
+                            ${item.name}
+                        </span>
+                        <i 
+                            class='fa-sharp fa-regular fa-circle-question parameter-help'
+                            data-id-item="${item.name}"
+                            data-expression="${item.expression}"
+                            data-description="${item.description}"
+                            data-dependent-input-users="${item.dependentInputUsers}"
+                            data-dependent-params="${item.dependentParams}"
+                        ></i>
+                    </div>
+                </li>`;
+    dataGlobal.push(item.name);
+  }
+  return html;
+}
+
+function renderPopoverParameter(
+  expression,
+  description,
+  dependentInputUsers,
+  dependentParams
+) {
+  return `<p><b>Descripción: </b>${description}</p>
+            <p><b>Expresión: </b>${expression}</p>
+            <p><b>Depende de Parámetros para regla: </b>${dependentInputUsers}</p>
+            <p><b>Depende de otros parámetros predefinidos: </b>${dependentParams}</p>`;
+}
+function renderPopoverInputs(example, description) {
+  let render = `<p><b>Descripción: </b>${description}</p>`;
+  if (example) render += `<p><b>Ejemplo: </b>${example}</p>`;
+  return render;
+}
+
+$("#btnGlobalParams").click(function () {
+  modalGlobalParamOpen = true;
+  populateOperators(dataInputs.inputUser);
+  populatePlans(dataInputs.inputUser);
+  populateUser(dataInputs.inputUser);
+  populateGlobalParams(dataInputs.globalParams);
+  var modal = new bootstrap.Modal(document.getElementById("globalParamsModal"));
+  $("#formGlobalParams #btnGlobalParams").hide();
+  $("#formGlobalParams #input_expression").val("");
+  modal.show();
+  actionsModals();
+});
+$("#globalParamsModal").on("hidden.bs.modal", function () {
+  modalGlobalParamOpen = false;
+  disableEventListerForModalGlobalParams();
+  populateEditorData();
+});
+$("#btnInputUser").click(function () {
+  var modal = new bootstrap.Modal(
+    document.getElementById("entradaReglasModal")
+  );
+  modal.show();
+});
+$("#entradaReglasModal").on("hidden.bs.modal", function () {
+  populateEditorData();
+});
+$("#formGlobalParams").submit(function () {
+  var form = $(this);
+  form.validate();
+
+  debugger;
+  const globalParamId = $("#formGlobalParams #GlobalParamId").val();
+
+  let url = "?handler=";
+
+  if (
+    globalParamId === "00000000-0000-0000-0000-000000000000" ||
+    globalParamId === ""
+  ) {
+    url = url + "CreateGlobalParam";
+  } else {
+    url = url + `UpdateGlobalParam&id${globalParamId}`;
+  }
+  var name = $("#formGlobalParams #Name").val();
+  var version = $("#formGlobalParams #Version").val();
+  var description = $("#formGlobalParams #Description").val();
+  var status = document.getElementById("Status").checked;
+  var expression = $("#formGlobalParams #input_expression").val();
+
+  let data = {
+    name,
+    version,
+    description,
+    status,
+    expression,
+  };
+
+  if (form.valid() === true) {
+    $.ajax({
+      dataType: "JSON",
+      type: "POST",
+      url: url,
+      headers: {
+        RequestVerificationToken: $("@Html.AntiForgeryToken()").val(),
+      },
+      data: data,
+    }).done(function (response) {
+      let notification = {
+        type: "success",
+        message: "Ocurrio un error al crear el parámetro predefinido",
+        duration: 5000,
+        ripple: true,
+        dismissible: false,
+        position: {
+          x: "center",
+          y: "top",
+        },
+      };
+      if (response.success) {
+        notification.message = response.message;
+        showNotification(notification);
+        document.getElementById("formGlobalParams").reset();
+        $("#globalParamsModal").modal("hide");
+        modalGlobalParamOpen = false;
+      } else {
+        notification.type = "error";
+        notification.message = response.message;
+        showNotification(notification);
+      }
+    });
+  }
+  return false;
+});
+$("#formInputUser").submit(function () {
+  var form = $(this);
+  form.validate();
+
+  debugger;
+  const inputUserId = $("#InputUserId").val();
+
+  let url = "?handler=";
+
+  if (
+    inputUserId === "00000000-0000-0000-0000-000000000000" ||
+    inputUserId === ""
+  ) {
+    url = url + "CreateInputUser";
+  } else {
+    url = url + `UpdateInputUser&id${inputUserId}`;
+  }
+  var name = $("#nameInput").val();
+  var type = $("#typeInput").val();
+  var description = $("#descriptionInput").val();
+  var parentId = $("#ParentId").val();
+  var metaData = $("#MetaData").val();
+
+  let data = {
+    name,
+    type,
+    description,
+    parentId,
+    metaData,
+  };
+
+  if (form.valid() === true) {
+    $.ajax({
+      dataType: "JSON",
+      type: "POST",
+      url: url,
+      headers: {
+        RequestVerificationToken: $("@Html.AntiForgeryToken()").val(),
+      },
+      data: data,
+    }).done(function (response) {
+      let notification = {
+        type: "success",
+        message: "Ocurrio un error al crear el input de usuario",
+        duration: 5000,
+        ripple: true,
+        dismissible: false,
+        position: {
+          x: "center",
+          y: "top",
+        },
+      };
+      if (response.success) {
+        notification.message = response.message;
+        showNotification(notification);
+        document.getElementById("formInputUser").reset();
+        $("#entradaReglasModal").modal("hide");
+      } else {
+        notification.type = "error";
+        notification.message = response.message;
+        showNotification(notification);
+      }
+    });
+  }
+  return false;
+});
+
+let fnDblClickOperators = function () {
+  const idTextArea = modalGlobalParamOpen
+    ? "#formGlobalParams #input_expression"
+    : "#input_expression";
+  const isAddable = $(this).data("is-addable");
+  const addBlankSpace = $(this).data("add-blank-space");
+  if (isAddable) {
+    let expression = $(idTextArea).val();
+    let textarea = $(idTextArea)[0];
+    let cursorPos = textarea.selectionEnd;
+    const item = $(this).data("id-item");
+    if (cursorPos > 0) {
+      if (addBlankSpace) {
+        expression =
+          expression.slice(0, cursorPos) +
+          ` ${item} ` +
+          expression.slice(cursorPos);
+        cursorPos = cursorPos + item.length + 2;
+      } else {
+        expression =
+          expression.slice(0, cursorPos) +
+          `${item}` +
+          expression.slice(cursorPos);
+        cursorPos = cursorPos + item.length;
+      }
+    } else {
+      if (addBlankSpace) {
+        expression += ` ${item} `;
+      } else {
+        expression += `${item}`;
+      }
+      cursorPos = expression.length;
+    }
+    $(idTextArea).val(expression);
+    textarea.setSelectionRange(cursorPos, cursorPos);
+    $(idTextArea).focus();
+  }
+};
+
+let fnDblClickPlanUserProperties = function () {
+  const idTextArea = modalGlobalParamOpen
+    ? "#formGlobalParams #input_expression"
+    : "#input_expression";
+  let textarea = $(idTextArea)[0];
+  let cursorPos = textarea.selectionStart;
+
+  let expression = $(idTextArea).val();
+  const idParent = $(this)
+    .parent()
+    .parent()
+    .parent()
+    .parent()
+    .parent()
+    .attr("id");
+
+  const idItem = $(this).data("id-item");
+  let text = "";
+  if (idParent === planParametersCode || idParent === userParametersCode) {
+    const idParentTemp =
+      idParent === planParametersCode ? idPlanParameter : idUserParameter;
+    text += `${idParameters}.${idParentTemp}.${idItem}`;
+  } else {
+    text += `${idItem}`;
+  }
+  if (cursorPos > 0) {
+    expression =
+      expression.slice(0, cursorPos) + `${text}` + expression.slice(cursorPos);
+    cursorPos = cursorPos + text.length;
+  } else {
+    expression += `${text}`;
+    cursorPos = expression.length;
+  }
+
+  $(idTextArea).val(expression);
+  textarea.setSelectionRange(cursorPos, cursorPos);
+  $(idTextArea).focus();
+};
+
+let fnDblClickGlobalParams = function () {
+  const idTextArea = modalGlobalParamOpen
+    ? "#formGlobalParams #input_expression"
+    : "#input_expression";
+  let textarea = $(idTextArea)[0];
+  let cursorPos = textarea.selectionStart;
+  let expression = $(idTextArea).val();
+  const idItem = $(this).data("id-item");
+
+  let text = "";
+  text += `${idItem}`;
+
+  if (cursorPos > 0) {
+    expression =
+      expression.slice(0, cursorPos) + `${text}` + expression.slice(cursorPos);
+    cursorPos = cursorPos + text.length;
+  } else {
+    expression += `${text}`;
+    cursorPos = expression.length;
+  }
+
+  $(idTextArea).val(expression);
+  textarea.setSelectionRange(cursorPos, cursorPos);
+  $(idTextArea).focus();
+};
+
+function actionsModals() {
+  disableEventListerForModalGlobalParams();
+  var idOperatorProperties = modalGlobalParamOpen
+    ? "#formGlobalParams #operators_properties"
+    : "#operators_properties, #user_properties ,#plan_properties";
+
+  // Double Click to Add Operators
+  $(idOperatorProperties).on(
+    "dblclick",
+    ".operator-selectable",
+    fnDblClickOperators
+  );
+
+  var idPlanUserPorperties = modalGlobalParamOpen
+    ? "#formGlobalParams #plan_properties, #formGlobalParams #user_properties"
+    : "#plan_properties, #user_properties";
+
+  // Double Click To Add Input User Params
+  $(idPlanUserPorperties).on(
+    "dblclick",
+    ".property-selectable",
+    fnDblClickPlanUserProperties
+  );
+
+  // Double Click to Add Global Params
+  var idGlobalParams = modalGlobalParamOpen
+    ? "#formGlobalParams #global_params"
+    : "#global_params";
+  $(idGlobalParams).on(
+    "dblclick",
+    ".parameter-selectable",
+    fnDblClickGlobalParams
+  );
+
+  // Operators Help
+  $(idOperatorProperties).on("mouseenter", ".user-input-help", function () {
+    $(".user-input-help").popover("dispose");
+    const title = $(this).data("title");
+    const description = $(this).data("description");
+    const example = $(this).data("example");
+    $(this)
+      .popover({
+        html: true,
+        title: `<b>${title}</b>`,
+        content: renderPopoverInputs(example, description),
+      })
+      .on("shown.bs.popover", function () {
+        $(".popover").css("max-width", "600px");
+      });
+  });
+
+  // GlobalParams Help
+  $(idGlobalParams).on("mouseenter", ".parameter-help", function () {
+    $(".user-input-help").popover("dispose");
+    $(".parameter-help").popover("dispose");
+
+    const id = $(this).data("id-item");
+    const expression = $(this).data("expression");
+    const description = $(this).data("description");
+    const dependentInputUsers = $(this).data("dependent-input-users");
+    const dependentParams = $(this).data("dependent-params");
+
+    $(this)
+      .popover({
+        html: true,
+        title: `<b>${id}</b>`,
+        content: renderPopoverParameter(
+          expression,
+          description,
+          dependentInputUsers,
+          dependentParams
+        ),
+        placement: "left",
+      })
+      .on("shown.bs.popover", function () {
+        $(".popover").css("max-width", "600px");
+      });
+  });
+}
+
+function disableEventListerForModalGlobalParams() {
+  $("#formGlobalParams #operators_properties").off(
+    "dblclick",
+    ".operator-selectable",
+    fnDblClickOperators
+  );
+  $(
+    "#formGlobalParams #plan_properties, #formGlobalParams #user_properties"
+  ).off("dblclick", ".property-selectable", fnDblClickPlanUserProperties);
+  $("#formGlobalParams #global_params").off(
+    "dblclick",
+    ".parameter-selectable",
+    fnDblClickGlobalParams
+  );
+}
+
+function actionOnNewRuleModal(action) {
+  if (action === "show") {
+    modalExpressionRule.show();
+  } else {
+    modalExpressionRule.hide();
+  }
+}
+
+function validateExpression() {
+  ruleUserOrPlanInputs = [];
+  ruleGlobalParams = [];
+  let alertContainer = $("#alertContainer").empty();
+
+  let expression = $("#input_expression").val();
+  let cleanExpression = expression
+    .replaceAll(idParameters + `.`, "")
+    .replaceAll(idPlanParameter + `.`, "")
+    .replaceAll(idUserParameter + `.`, "");
+
+  let isValidExpression = true;
+  let errorMessages = [];
+
+  if (expression.trim() === "") {
+    errorMessages.push("La expresión no puede estar en blanco");
+    isValidExpression = false;
+  }
+
+  let splitExpression = cleanExpression
+    .split(new RegExp(regexString))
+    .filter((element) => element !== undefined)
+    .map((str) => str.trim())
+    .filter((element) => element !== " " && element !== "")
+    .filter((element) => !element.startsWith("$"));
+
+  splitExpression.forEach((element) => {
+    let foundInputParameters = dataInputs.find((input) => input === element);
+    if (typeof foundInputParameters !== "undefined") {
+      ruleUserOrPlanInputs.push(element);
+    }
+    let foundGlobalParameters = dataGlobal.find((global) => global === element);
+    if (typeof foundGlobalParameters !== "undefined") {
+      ruleGlobalParams.push(element);
+    }
+
+    if (
+      typeof foundInputParameters === "undefined" &&
+      typeof foundGlobalParameters === "undefined"
+    ) {
+      isValidExpression = false;
+      if (typeof foundInputParameters === "undefined") {
+        errorMessages.push(
+          "Parámetro de usuario o plan no definido: " + element
+        );
+        return;
+      }
+      errorMessages.push("Parámetro global no definido: " + element);
+    }
+  });
+
+  let plans = responseInputData.find(
+    (parameter) => parameter.inputTypeCode === planParametersCode
+  ).children;
+  let userProperties = responseInputData.find(
+    (parameter) => parameter.inputTypeCode === userParametersCode
+  ).children;
+  let UserPlansProperties = plans.concat(userProperties);
+  let coincidentPlansObjects = [];
+  for (let i = 0; i < UserPlansProperties.length; i++) {
+    if (ruleUserOrPlanInputs.includes(UserPlansProperties[i].name)) {
+      coincidentPlansObjects.push(UserPlansProperties[i].name);
+    }
+  }
+
+  let incorrectPlans = [];
+  coincidentPlansObjects.forEach((object) => {
+    let index = expression.indexOf(object);
+    let textBefore = expression.substring(0, index).trim();
+    if (
+      !textBefore.endsWith(`${idParameters}.${idPlanParameter}.`) &&
+      !textBefore.endsWith(`${idParameters}.${idUserParameter}.`)
+    ) {
+      incorrectPlans.push(object);
+    }
+  });
+
+  if (incorrectPlans.length > 0) {
+    isValidExpression = false;
+  }
+
+  if (isValidExpression) {
+    return true;
+  }
+
+  let html = "";
+  errorMessages.forEach((element) => {
+    html += '<p class="mb-0">' + element + "</p>";
+  });
+  htmlForFirstError = `
+             <hr><p>Recuerde que para ingresar datos de entrada en la expresión, debe utilizar el símbolo $, Ej: codigoPlan == $"N4-C" o diasCarencia >= $10</p>
+             ${html}
+            `;
+  let htmlForPlanPrefixMissing = "";
+  incorrectPlans.forEach((element) => {
+    htmlForPlanPrefixMissing += '<p class="mb-0">' + element + "</p>";
+  });
+  let htmlForPlanPrefixMissingParagraph = `<hr><p>Recuerde que las propiedades padre de plan o parámetros de regla Ej: deducibles, deduciblePorPagar se debe anteponer el prefijo parametros.plan.deducibles o parametros.usuario.deduciblePorPagar</p>${htmlForPlanPrefixMissing}`;
+
+  alertContainer.append(
+    `<div class="alert alert-warning alert-dismissible fade show" role="alert" id="test">
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    <div class="alert-message" id="alertMessage">
+                        <h4 class="alert-heading">Expresión no valida</h4>
+                        <p>Existen errores en la expresión, revísela y vuelva a intentarlo.</p>
+                        ${errorMessages.length > 0 ? htmlForFirstError : ""}
+                        ${
+                          incorrectPlans.length > 0
+                            ? htmlForPlanPrefixMissingParagraph
+                            : ""
+                        }
+                    </div>
+                </div>`
+  );
+  return false;
+}
+
+function getInputs(parentPath) {
+  saveRuleExpression();
+  let inputs = [];
+  $("input").each(function () {
+    if (this.value != "" && this.id != "") {
+      inputs.push({ id: this.id, value: this.value });
+    }
+  });
+  if ($("#Rule_Operator").val() != undefined) {
+    inputs.push({ id: "Rule_Operator", value: $("#Rule_Operator").val() });
+  }
+  let returnUrl = "";
+  let query = window.location.search;
+  if (window.location.search.includes("&jsonData")) {
+    let querySplit = query.split("&");
+    if (querySplit[1].includes("flowId")) {
+      query = querySplit[0] + "&" + querySplit[1];
+    } else {
+      query = querySplit[0];
+    }
+  }
+  returnUrl = `${window.location.pathname}${query}&jsonData=${JSON.stringify(
+    inputs
+  )}`;
+  window.location.href = `${parentPath}?returnUrl=${returnUrl}`;
+}
+
+$("#btnAddGlobalParam").click(function () {
+  getInputs("/RulesEngine/GlobalParams/Create");
+});
+$("#btnAddInputUser").click(function () {
+  getInputs("/RulesEngine/InputUser/Create");
+});
+
+function getRegularExpression() {
+  let url = "./CreateSimple2?handler=ExpressionRule";
+  $.ajax({
+    dataType: "JSON",
+    type: "GET",
+    url: url,
+    headers: { RequestVerificationToken: $("@Html.AntiForgeryToken()").val() },
+  }).done(function (response) {
+    let notificationError = {
+      type: "error",
+      message: "No se puede obtener la expresión regular para validar la regla",
+      duration: 5000,
+      ripple: true,
+      dismissible: false,
+      position: {
+        x: "center",
+        y: "top",
+      },
     };
-    self.action = ko.computed(function () {
-        if (self.optionSelected()) {
-            const dataType = self.optionSelected().dataType();
-            if ((dataType === DATA_TYPE_STRING || dataType === DATA_TYPE_NUMERIC || dataType === DATA_TYPE_DATETIME) && self.addComparison()) {
-                if (hasData) {
-                    return new ActionLogical(self.optionSelected().dataType(), jsFromServer.action);
-                }
-                return new ActionLogical(self.optionSelected().dataType());
-            }
-            if (dataType === DATA_TYPE_BOOLEAN) {
-                if (hasData) {
-                    return new ActionBoolean(jsFromServer.action);
-                }
-                return new ActionBoolean();
-            }
-            if (dataType === DATA_TYPE_LIST && self.addFunctionForList()) {
-                if (hasData) {
-                    return new ActionListOptions(self.optionSelected(), jsFromServer.action)
-                }
-                return new ActionListOptions(self.optionSelected());
-            }
-        }
-        return new ActionNone();
+    if (response.success) {
+      regexString = response.message.value;
+    } else {
+      showNotification(notificationError);
+    }
+  });
+}
+function GetUsedParams(inputUserList, globalParamsList, expression) {
+  let cleanExpression = expression
+    .replaceAll(idParameters + `.`, "")
+    .replaceAll(idPlanParameter + `.`, "")
+    .replaceAll(idUserParameter + `.`, "");
+  let splitExpression = cleanExpression
+    .split(new RegExp(regexString))
+    .filter((element) => element !== undefined)
+    .map((str) => str.trim())
+    .filter((element) => element !== " " && element !== "")
+    .filter((element) => !element.startsWith("$"));
+  var arrayInputUser = [];
+  var arrayGlobalParams = [];
+  inputUserList.forEach((inputUser) => {
+    if (splitExpression.find((x) => x == inputUser)) {
+      arrayInputUser.push(inputUser);
+    }
+  });
+
+  globalParamsList.forEach((globalParam) => {
+    if (splitExpression.find((x) => x == globalParam)) {
+      arrayGlobalParams.push(globalParam);
+    }
+  });
+  return { arrayInputUser, arrayGlobalParams };
+}
+function getInputsTest() {
+  let inputs = [];
+  $("#inputsUser")
+    .find(":input")
+    .each(function () {
+      inputs.push({ id: this.id, value: this.value });
     });
-    self.classDFlex = ko.computed(function () {
-        if (self.optionSelected()) {
-            const dataType = self.optionSelected().dataType();
-            if (dataType === DATA_TYPE_STRING || dataType === DATA_TYPE_NUMERIC || dataType === DATA_TYPE_DATETIME || dataType === DATA_TYPE_BOOLEAN) {
-                return CLASS_D_FLEX;
-            }
-            return "";
-        }
-        return "";
-    });
-
-    self.text = ko.computed(function () {
-        let text = self.id();
-        if (self.optionSelected() !== undefined) {
-            text += `.${self.optionSelected().text()}${self.actionPrimitive().text()}${self.action().text()}`;
-        }
-        return text;
-    });
-}
-Filter.prototype.toJSON = function () {
-    var copy = ko.toJS(this);
-    delete copy.childrens;
-    delete copy.showChildren;
-    delete copy.classDFlex;
-    delete copy.text;
-    return copy;
+  return inputs;
 }
 
-function FilterSimpleDomain(jsFromServer) {
-    const self = this;
-    let posDomain = 0;
-    let hasData = false;
-    if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
-        hasData = true
-        posDomain = getObjectById(jsFromServer.selectedDomain, domainVariables)
-    }
-    self.domains = ko.observableArray(domainVariables)
-    self.selectedDomain = ko.observable(domainVariables[posDomain]);
-    self.filter = ko.computed(function () {
-        if (self.selectedDomain()) {
-            if (self.selectedDomain().id === ID_SALUD) {
-                if (hasData) {
-                    return new FilterSimple(dataGlobal, jsFromServer.filter)
-                }
-                return new FilterSimple(dataGlobal)
-            }
-            if (self.selectedDomain().id === ID_LOCAL_PARAMS) {
-                if (hasData) {
-                    return new FilterLocalParamsSimple(localParamsGlobal, jsonFromServer.filter)
-                }
-                return new FilterLocalParamsSimple(localParamsGlobal)
-            }
-        }
-        return new ActionNone()
-    });
-    self.text = ko.computed(function () {
-        return self.filter().text();
-    });
-}
-FilterSimpleDomain.prototype.toJSON = function () {
-    var copy = ko.toJS(this);
-    delete copy.domains;
-    delete copy.text;
-    return copy;
-}
-
-function FilterSimple(data, jsFromServer) {
-    const self = this;
-    let posOptionSelected = 0;
-    let hasData = false;
-    if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
-        hasData = true;
-    }
-    const childrens = ko.utils.arrayMap(data.childrens, function (c) {
-        if (hasData && jsFromServer.hasOwnProperty('optionSelected')) {
-            if (jsFromServer.optionSelected.hasOwnProperty('id')) {
-                if (c.id === jsFromServer.optionSelected.id) {
-                    return new FilterSimple(c, jsFromServer.optionSelected)
-                }
-            }
-        }
-        return new Filter(c);
-    })
-    if (hasData && jsFromServer.hasOwnProperty('optionSelected')) {
-        posOptionSelected = getObjectById(jsFromServer.optionSelected, ko.toJS(childrens))
-    }
-    self.templateName = 'filter-simple-template';
-    self.name = ko.observable(hasData ? jsFromServer.name : data.name);
-    self.id = ko.observable(hasData ? jsFromServer.id : data.id);
-    self.childrens = ko.observableArray(childrens);
-    self.optionSelected = ko.observable(childrens[posOptionSelected]);
-    self.showChildren = ko.computed(function () {
-        return self.optionSelected() && self.optionSelected().childrens().length > 0;
-    });
-    self.text = ko.computed(function () {
-        let text = self.id();
-        if (self.optionSelected()) {
-            text += '.' + self.optionSelected().text();
-        }
-        return text;
-    });
-}
-FilterSimple.prototype.toJSON = function () {
-    var copy = ko.toJS(this);
-    delete copy.childrens;
-    delete copy.showChildren;
-    delete copy.text;
-    return copy;
-}
-
-function FilterLocalParamsSimple(data, jsFromServer) {
-    const self = this;
-    data = getDataWithOutFunctions(data);
-    let hasData = false;
-    let posSelectedOption = 0;
-    if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
-        hasData = true;
-        posSelectedOption = getObjectById(jsFromServer.selectedOption, data)
-    }
-    self.childrens = ko.observableArray(data);
-    self.selectedOption = ko.observable(data[posSelectedOption]);
-    self.action = ko.computed(function () {
-        if (self.selectedOption()) {
-            if (hasData) {
-                return new FilterSimple(self.selectedOption(), jsFromServer.selectedOption)
-            }
-            return new FilterSimple(self.selectedOption())
-        }
-        return new ActionNone()
-    })
-    self.text = ko.computed(function () {
-        if (self.selectedOption()) {
-            return self.action().text();
-        }
-        return ""
-    })
-}
-FilterLocalParamsSimple.prototype.toJSON = function () {
-    var copy = ko.toJS(this);
-    delete copy.childrens;
-    delete copy.text;
-    return copy;
-}
-
-function ActionLogical(dataType, jsFromServer) {
-    const self = this;
-    let hasData = false;
-    const comparisons = getOperators(dataType)
-    let pos = 0;
-    if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
-        hasData = true;
-        pos = getObjectByValue(jsFromServer.selectedComparison, comparisons)
-    }
-    self.comparisons = ko.observableArray(comparisons);
-    self.selectedComparison = ko.observable(comparisons[pos].value);
-    self.fieldRight = ko.observable(hasData ? new SelectVariableTypeSimple(jsFromServer.fieldRight) : new SelectVariableTypeSimple())
-    self.isNull = ko.observable(hasData ? jsFromServer.isNull : false);
-
-    self.text = ko.computed(function () {
-        if (self.isNull()) {
-            return ` ${self.selectedComparison()} ${IS_NULL}`;
-        }
-        return ` ${self.selectedComparison()} ${self.fieldRight().text()}`;
-    });
-}
-ActionLogical.prototype.toJSON = function () {
-    var copy = ko.toJS(this);
-    delete copy.comparisons;
-    delete copy.text;
-    return copy;
-}
-
-function ActionBoolean(jsFromServer) {
-    const self = this;
-    let posSelectedComparison = 0;
-    let posSelectedFieldRight = 0;
-    const operatorsArrayBoolean = getOperators(DATA_TYPE_BOOLEAN)
-    if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
-        posSelectedComparison = getObjectByValue(jsFromServer.selectedComparison, operatorsArrayBoolean);
-        posSelectedFieldRight = getObjectByValue(jsFromServer.selectedFieldRight, booleanValues);
-    }
-    self.comparisons = ko.observableArray(operatorsArrayBoolean);
-    self.selectedComparison = ko.observable(operatorsArrayBoolean[posSelectedComparison].value);
-    self.fieldRight = ko.observableArray(booleanValues);
-    self.selectedFieldRight = ko.observable(booleanValues[posSelectedFieldRight].value);
-
-    self.text = ko.computed(function () {
-        return ` ${self.selectedComparison()} ${self.selectedFieldRight()}`;
-    });
-}
-ActionBoolean.prototype.toJSON = function () {
-    var copy = ko.toJS(this);
-    delete copy.comparisons;
-    delete copy.fieldRight;
-    delete copy.text;
-    return copy;
-}
-
-function ActionListOptions(data, jsFromServer) {
-    const self = this;
-    data = getDataWithOutFunctions(data);
-    let hasData = false;
-    let posSelectedFunction = 0;
-    if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
-        hasData = true;
-        posSelectedFunction = getObjectByIdValue(jsFromServer.selectedFunction, listFunctions)
-    }
-    self.listOperations = ko.observableArray(listFunctions);
-    self.selectedFunction = ko.observable(listFunctions[posSelectedFunction].id);
-    self.classDFlex = ko.computed(function () {
-        if (self.selectedFunction()) {
-            if (self.selectedFunction().id === FUNCTION_EQUAL || self.selectedFunction().id === FUNCTION_NOT_EQUAL) {
-                return CLASS_D_FLEX
-            }
-        }
-        return ""
-    })
-    self.action = ko.computed(function () {
-        if (self.selectedFunction()) {
-            switch (self.selectedFunction().id) {
-                case FUNCTION_WHERE:
-                    if (hasData) {
-                        if (jsFromServer.action.templateName === FUNCTION_WHERE) {
-                            return new ActionList(data, FUNCTION_WHERE, jsFromServer.action)
-                        }
-                    }
-                    return new ActionList(data, FUNCTION_WHERE);
-                case FUNCTION_SELECT:
-                    if (hasData) {
-                        if (jsFromServer.action.templateName === FUNCTION_SELECT) {
-                            return new ActionList(data, FUNCTION_SELECT, jsFromServer.action)
-                        }
-                    }
-                    return new ActionList(data, FUNCTION_SELECT);
-                case FUNCTION_SUM:
-                    if (hasData) {
-                        if (jsFromServer.action.templateName === FUNCTION_SUM) {
-                            return new ActionList(data, FUNCTION_SUM, jsFromServer.action)
-                        }
-                    }
-                    return new ActionList(data, FUNCTION_SUM);
-                case FUNCTION_FIRST:
-                    if (hasData) {
-                        if (jsFromServer.action.templateName === FUNCTION_FIRST) {
-                            return new ActionList(data, FUNCTION_FIRST, jsFromServer.action)
-                        }
-                    }
-                    return new ActionList(data, FUNCTION_FIRST);
-                case FUNCTION_DISTINCT:
-                    if (hasData) {
-                        if (jsFromServer.action.templateName === FUNCTION_DISTINCT) {
-                            return new ActionList(data, FUNCTION_DISTINCT, jsFromServer.action)
-                        }
-                    }
-                    return new ActionList(data, FUNCTION_DISTINCT);;
-                case FUNCTION_COUNT:
-                    if (hasData) {
-                        if (jsFromServer.action.templateName === FUNCTION_COUNT) {
-                            return new ActionList(data, FUNCTION_COUNT, jsFromServer.action)
-                        }
-                    }
-                    return new ActionList(data, FUNCTION_COUNT)
-                case FUNCTION_FIRSTORDEFAULT:
-                    if (hasData) {
-                        if (jsFromServer.action.templateName === FUNCTION_FIRSTORDEFAULT) {
-                            return new ActionList(data, FUNCTION_FIRSTORDEFAULT, jsFromServer.action)
-                        }
-                    }
-                    return new ActionList(data, FUNCTION_FIRSTORDEFAULT);
-                case FUNCTION_ANY:
-                    if (hasData) {
-                        if (jsFromServer.action.templateName === FUNCTION_ANY) {
-                            return new ActionList(data, FUNCTION_ANY, jsFromServer.action)
-                        }
-                    }
-                    return new ActionList(data, FUNCTION_ANY);
-                case FUNCTION_EQUAL:
-                    if (hasData) {
-                        if (jsFromServer.action.templateName === FUNCTION_EQUAL) {
-                            return new ActionListComparison(self.selectedFunction().id, jsFromServer.action)
-                        }
-                    }
-                    return new ActionListComparison(self.selectedFunction().id);
-                case FUNCTION_NOT_EQUAL:
-                    if (hasData) {
-                        if (jsFromServer.action.templateName === FUNCTION_EQUAL) {
-                            return new ActionListComparison(self.selectedFunction().id, jsFromServer.action)
-                        }
-                    }
-                    return new ActionListComparison(self.selectedFunction().id);
-            }
-        }
-        return new ActionNone();
-    });
-
-    self.text = ko.computed(function () {
-        if (self.selectedFunction() !== undefined) {
-            return self.action().text();
-        }
-        return "";
-    });
-
-}
-ActionListOptions.prototype.toJSON = function () {
-    var copy = ko.toJS(this);
-    delete copy.listOperations;
-    delete copy.classDFlex;
-    delete copy.text;
-    return copy;
-}
-
-function ActionList(data, listOptionId, jsFromServer) {
-    const self = this;
-    var hasData = false;
-    let posSelectedLogicalOperator = 0;
-    if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
-        hasData = true;
-        posSelectedLogicalOperator = getObjectByValue(jsFromServer.selectedLogicalOperator, logicalOperators)
-    }
-    self.templateName = listOptionId;
-    self.logicalOperators = ko.observableArray(logicalOperators);
-    self.selectedLogicalOperator = ko.observable(logicalOperators[posSelectedLogicalOperator].value);
-    self.childrens = ko.observableArray();
-    if (hasData) {
-        var mapping = {
-            'childrens': {
-                create: function (options) {
-                    /*return new ActionSubLogical(typeof data.childrens != "object" ? data.childrens() : data.childrens, options.data)*/
-                    return new ExpressionSelectObjectFromList("", data, options.data)
-                }
-            },
-            'ignore': ['logicalOperators', 'selectedLogicalOperator', 'addFunctionToWhere', 'action', 'addCondition', 'removeChild', 'removeChild']
-        }
-        ko.mapping.fromJS(jsFromServer, mapping, self)
-    }
-    self.addFunctionToWhere = ko.observable(hasData ? jsFromServer.addFunctionToWhere : false);
-    self.action = ko.computed(function () {
-        if (self.addFunctionToWhere()) {
-            if (hasData) {
-                return new ActionListOptions(data, jsFromServer.action)
-            }
-            return new ActionListOptions(data);
-        }
-        return new ActionNone();
-    })
-    self.addExpression = function () {
-        self.childrens.push(new ExpressionSelectObjectFromList("", data))
-    }
-    self.removeChild = function (child) {
-        self.childrens.remove(child);
-    };
-    self.text = ko.computed(function () {
-        let result = `.${listOptionId}(`;
-        let op = '';
-        for (const child of self.childrens()) {
-            result += op + child.text();
-            op = ` ${self.selectedLogicalOperator()} `;
-        }
-        result += ')';
-        if (self.addFunctionToWhere()) {
-            result += self.action().text()
-        }
-        return result
-    });
-}
-ActionList.prototype.toJSON = function () {
-    var copy = ko.toJS(this);
-    delete copy.logicalOperators;
-    delete copy.text;
-    return copy;
-}
-
-function ActionListComparison(comparison, jsFromServer) {
-    const self = this;
-    var hasData = false;
-    if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
-        hasData = true;
-    }
-    self.templateName = FUNCTION_EQUAL;
-    self.action = ko.observable(hasData ? new SelectVariableType(jsFromServer) : new SelectVariableType())
-    self.text = ko.computed(function () {
-        return `${comparison} ${self.action().text()}`;
-    });
-}
-ActionListComparison.prototype.toJSON = function () {
-    var copy = ko.toJS(this);
-    delete copy.text;
-    return copy;
-}
-
-function SelectVariableType(jsFromServer) {
-    const self = this;
-    let posFunction = 0;
-    let posVariableType = 0;
-    const variableType = [
-        { name: "Ingresar valor", id: "value" },
-        { name: "Ingresar expresi\u00F3n", id: "expression" }
-    ];
-
-    let hasData = false;
-    if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
-        hasData = true;
-        if (jsFromServer.hasOwnProperty('listFunctionConvertConcat')) {
-            posFunction = getObjectById(jsFromServer.selectedFunction, listFunctionConvertConcat)
-        }
-        posVariableType = getObjectById(jsFromServer.selectedVariable, variableType)
-    }
-    self.templatesName = 'select-variable-type-template'
-    self.addFunctionToExpression = ko.observable(hasData ? jsFromServer.addFunctionToExpression : false);
-    self.functions = ko.observableArray(listFunctionConvert);
-    self.selectedFunction = ko.observable(listFunctionConvert[posFunction]);
-    self.variableTypes = ko.observableArray(variableType);
-    self.selectedVariable = ko.observable(variableType[posVariableType]);
-
-    self.action = ko.computed(function () {
-        if (self.selectedVariable()) {
-            if (self.selectedVariable().id === "value") {
-                if (hasData) {
-                    if (jsFromServer.action.templatesName === "input-value-template") {
-                        return new InputValue(jsFromServer.action)
-                    }
-                }
-                return new InputValue()
-            }
-            if (self.selectedVariable().id === "expression") {
-                if (hasData) {
-                    if (jsFromServer.action.templatesName === "expression-template") {
-                        return new Expression("", jsFromServer.action)
-                    }
-                }
-                return new Expression()
-                //return new Filter(dataGlobal)
-            }
-        }
-        return new ActionNone();
-    })
-    //ko.mapping.fromJS(jsFromServer, {}, self);
-    self.text = ko.computed(function () {
-        if (self.selectedVariable() !== undefined) {
-            if (self.selectedFunction() && self.addFunctionToExpression()) {
-                return self.selectedFunction().id + "(" + self.action().text() + ")"
-            } else {
-                return self.action().text();
-            }
-        }
-        return "";
-    })
-}
-SelectVariableType.prototype.toJSON = function () {
-    var copy = ko.toJS(this);
-    delete copy.functions;
-    delete copy.variableTypes;
-    delete copy.text;
-    return copy;
-}
-
-function SelectVariableTypeSimple(jsFromServer) {
-    const self = this;
-    const variableType = [
-        { name: "Ingresar valor", id: "value" },
-        { name: "Seleccionar propiedad", id: "property" }
-    ]
-    let posVariableType = 0;
-    let hasData = false;
-    if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
-        hasData = true;
-        posVariableType = getObjectById(jsFromServer.selectedVariable, variableType)
-    }
-    self.variableTypes = ko.observableArray(variableType);
-    self.selectedVariable = ko.observable(variableType[posVariableType]);
-    self.action = ko.computed(function () {
-        if (self.selectedVariable()) {
-            if (self.selectedVariable().id === "value") {
-                if (hasData) {
-                    if (jsFromServer.selectedVariable.id === "value") {
-                        return new InputValue(jsFromServer.action)
-                    }
-                }
-                return new InputValue()
-            }
-            if (self.selectedVariable().id === "property") {
-                if (hasData) {
-                    if (jsFromServer.selectedVariable.id === "property") {
-                        return new FilterSimpleDomain(jsFromServer.action)
-                    }
-                }
-                return new FilterSimpleDomain()
-                //return new Filter(dataGlobal)
-            }
-        }
-        return new ActionNone();
-    })
-    self.text = ko.computed(function () {
-        if (self.selectedVariable() !== undefined) {
-            return self.action().text();
-        }
-        return "";
-    })
-}
-SelectVariableTypeSimple.prototype.toJSON = function () {
-    var copy = ko.toJS(this);
-    delete copy.variableTypes;
-    delete copy.text;
-    return copy;
-}
-
-function InputValue(jsFromServer) {
-    const self = this;
-    self.templatesName = "input-value-template";
-    self.textInput = ko.observable("")
-    self.addQuotes = ko.observable(false);
-    
-    if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
-        ko.mapping.fromJS(jsFromServer, {}, self)
-    }
-    self.text = ko.computed(function () {
-        if (self.addQuotes()) {
-            return `"${self.textInput()}"`;
-        }
-        return self.textInput();
-    })
-}
-InputValue.prototype.toJSON = function () {
-    var copy = ko.toJS(this);
-    delete copy.text;
-    return copy;
-}
-
-function ActionSubLogical(data, jsFromServer) {
-    const self = this;
-    var hasData = false;
-    var posSelectedOption = 0;
-    if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
-        hasData = true
-        posSelectedOption = getObjectById(jsFromServer.selectedOption, ko.mapping.toJS(data))
-    }
-    self.options = ko.observableArray(data)
-    self.selectedOption = ko.observable(data[posSelectedOption]);
-    self.addFunctionToPrimitive = ko.observable(hasData ? jsFromServer.addFunctionToPrimitive : false);
-    self.actionPrimitive = ko.computed(function () {
-        if (self.addFunctionToPrimitive()) {
-            if (hasData) {
-                return new ActionForPrimitive(jsFromServer.actionPrimitive)
-            }
-            return new ActionForPrimitive();
-        }
-        return new ActionNone();
-    })
-    self.action = ko.computed(function () {
-        if (self.selectedOption()) {
-            const dataType = typeof self.selectedOption().dataType != "string" ? self.selectedOption().dataType() : self.selectedOption().dataType;
-            if (dataType === DATA_TYPE_STRING || dataType === DATA_TYPE_NUMERIC || dataType === DATA_TYPE_DATETIME) {
-                if (hasData) {
-                    return new ActionLogical(dataType, jsFromServer.action);
-                }
-                return new ActionLogical(dataType);
-            }
-            if (dataType === DATA_TYPE_BOOLEAN) {
-                if (hasData) {
-                    return new ActionBoolean(jsFromServer.action);
-                }
-                return new ActionBoolean();
-            }
-            if (dataType === DATA_TYPE_LIST) {
-                if (hasData) {
-                    return new ActionListOptions(self.selectedOption(), jsFromServer.action);
-                }
-                return new ActionListOptions(self.selectedOption());
-            }
-        }
-        return new ActionNone()
-    });
-    self.text = ko.computed(function () {
-        if (self.selectedOption()) {
-            const id = typeof self.selectedOption().id != 'string' ? self.selectedOption().id() : self.selectedOption().id;
-            return id + self.actionPrimitive().text() + self.action().text();
-        }
-        return '';
-    });
-}
-ActionSubLogical.prototype.toJSON = function () {
-    var copy = ko.toJS(this);
-    delete copy.options;
-    delete copy.text;
-    return copy;
-}
-
-function ActionForPrimitive(jsFromServer) {
-    const self = this;
-    var posSelectedOption = 0;
-    if (jsFromServer !== "" && jsFromServer !== null && jsFromServer !== undefined) {
-        posSelectedOption = getObjectById(jsFromServer.selectedOption, listFunctionConvertConcat)
-    }
-    self.options = ko.observableArray(listFunctionConvertConcat);
-    self.selectedOption = ko.observable(listFunctionConvertConcat[posSelectedOption])
-    self.text = ko.computed(function () {
-        if (self.selectedOption()) {
-            return "." + self.selectedOption().id;
-        }
-        return ""
-    })
-
-}
-ActionForPrimitive.prototype.toJSON = function () {
-    var copy = ko.toJS(this);
-    delete copy.options;
-    delete copy.text;
-    return copy;
-}
-
-function getOperation(operation) {
-    const position = operators.map(o => o.value).indexOf(operation.value)
-    if (position !== -1) {
-        return position
-    }
-    return 0
-}
-
-function getObjectById(object, objectsArray) {
-    const position = objectsArray.map(o => o.id).indexOf(object.id)
-    if (position !== -1) {
-        return position
-    }
-    return 0
-}
-
-function getObjectByIdValue(id, objectsArray) {
-    const position = objectsArray.map(o => o.id).indexOf(id)
-    if (position !== -1) {
-        return position
-    }
-    return 0
-}
-
-function getObjectByValue(value, objectsArray) {
-    const position = objectsArray.map(o => o.value).indexOf(value)
-    if (position !== -1) {
-        return position
-    }
-    return 0
-}
-//funcion para obtener los operadores por el dataType
-function getOperators(dataType) {
-    const result = []
-    for (const operator of operators) {
-        if (operator.applyTo.indexOf(dataType) == -1) {
-            continue;
-        }
-        result.push(operator);
-    }
-    return result;
-}
-
-function getDataWithOutFunctions(data) {
-
-    const name = typeof data.name != "string" ? data.name() : data.name;
-    const id = typeof data.id != "string" ? data.id() : data.id;
-    const dataType = typeof data.dataType != "string" ? data.dataType() : data.dataType;
-    const childrens = typeof data.childrens != "object" ? data.childrens().map(function (children) {
-        return getDataWithOutFunctions(children);
-    }) : data.childrens.map(function (children) {
-        return getDataWithOutFunctions(children);
-    });
-    return {
-        name: name,
-        id: id,
-        dataType: dataType,
-        childrens: childrens
-    };
-}
-
-function ActionNone() {
-    const self = this;
-    self.text = ko.observable("");
-}
-
-function Operator(name, value, applyTo) {
-    this.name = name;
-    this.value = value;
-    this.applyTo = applyTo;
-}
-
-function Property(name, value, childrens, dataType) {
-    const self = this;
-    self.name = name;
-    self.id = value;
-    self.childrens = childrens;
-    self.dataType = dataType;
-}
-
-function LogicalOperator(name, value) {
-    this.name = name;
-    this.value = value;
-}
-
-function addProperties(data) {
-    const dataClean = getDataWithOutFunctions(data)
-    addedProperties = dataClean.childrens;
-}
-function removeProperties() {
-    addedProperties = [];
-}
-
-function ViewModel(data, localParams, jsonFromServer) {
-    const self = this;
-    let jsObjectFromServer = {};
-    if (jsonFromServer !== undefined && jsonFromServer !== null && jsonFromServer !== "") {
-        jsObjectFromServer = JSON.parse(jsonFromServer);
-    }
-    dataGlobal = data;
-    localParamsGlobal = localParams;
-    self.group = ko.observable(new Group("", jsObjectFromServer.group));
-
-    // the text() function is just an example to show output
-    self.text = ko.computed(function () {
-        return self.group().text();
-    });
-}
-ViewModel.prototype.toJSON = function () {
-    var copy = ko.toJS(this);
-    delete copy.text;
-    return copy;
-}
+$("#testRule").click(function () {
+  var inputs = getInputsTest();
+  let inputsJson = JSON.stringify(inputs);
+  let expression = $("#expression_testing").val();
+  let globalParams = $("#dependedParamsTest").val();
+  let planCode = $("#planCode").val();
+  let planVersion = $("#planVersion").val();
+  let data = {
+    expression,
+    inputsJson,
+    planCode,
+    planVersion,
+    globalParams,
+  };
+  $.ajax({
+    type: "POST",
+    url: "./CreateSimple2?handler=Test",
+    data: data,
+    headers: { RequestVerificationToken: $("@Html.AntiForgeryToken()").val() },
+    success: function (response) {
+      let notification = {
+        type: "error",
+        message:
+          "Ocurrio un error al probar la regla, por favor revise el resultado de la ejecución",
+        duration: 5000,
+        ripple: true,
+        dismissible: false,
+        position: {
+          x: "center",
+          y: "top",
+        },
+      };
+      if (!response.success) {
+        showNotification(notification);
+      }
+      $("#Result").val(JSON.stringify(response.message, null, 2));
+    },
+  });
+});
