@@ -68,7 +68,7 @@ $(document).ready(function () {
       url: url,
       data: data,
       headers: {
-        RequestVerificationToken: $("@Html.AntiForgeryToken()").val(),
+        RequestVerificationToken: rulesAntiForgeryToken,
       },
       success: function (response) {
         $("#testRuleContent").html(response);
@@ -183,7 +183,7 @@ function populateEditorData() {
     dataType: "JSON",
     type: "GET",
     url: url,
-    headers: { RequestVerificationToken: $("@Html.AntiForgeryToken()").val() },
+    headers: { RequestVerificationToken: rulesAntiForgeryToken },
   }).done(function (response) {
     let notificationCreate = {
       type: "error",
@@ -605,7 +605,7 @@ $("#formGlobalParams").submit(function () {
       type: "POST",
       url: url,
       headers: {
-        RequestVerificationToken: $("@Html.AntiForgeryToken()").val(),
+        RequestVerificationToken: rulesAntiForgeryToken,
       },
       data: data,
     }).done(function (response) {
@@ -672,7 +672,7 @@ $("#formInputUser").submit(function () {
       type: "POST",
       url: url,
       headers: {
-        RequestVerificationToken: $("@Html.AntiForgeryToken()").val(),
+        RequestVerificationToken: rulesAntiForgeryToken,
       },
       data: data,
     }).done(function (response) {
@@ -1067,7 +1067,7 @@ function getRegularExpression() {
     dataType: "JSON",
     type: "GET",
     url: url,
-    headers: { RequestVerificationToken: $("@Html.AntiForgeryToken()").val() },
+    headers: { RequestVerificationToken: rulesAntiForgeryToken },
   }).done(function (response) {
     let notificationError = {
       type: "error",
@@ -1141,7 +1141,7 @@ $("#testRule").click(function () {
     type: "POST",
     url: "./CreateSimple2?handler=Test",
     data: data,
-    headers: { RequestVerificationToken: $("@Html.AntiForgeryToken()").val() },
+    headers: { RequestVerificationToken: rulesAntiForgeryToken },
     success: function (response) {
       let notification = {
         type: "error",
